@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  transpilePackages: ["@yoeldevsoft25/storefront-sdk", "@yoeldevsoft25/store-contracts"],
   images: {
     remotePatterns: [
       {
