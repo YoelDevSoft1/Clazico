@@ -41,7 +41,8 @@
     "superjson": "^2.2.6",
     "zod": "^4.4.3",
     "zustand": "^5.0.13",
-    "@yoeldevsoft25/storefront-sdk": "^0.1.1"
+    "@yoeldevsoft25/storefront-sdk": "file:./libs/storefront-sdk",
+    "@yoeldevsoft25/store-contracts": "file:./libs/store-contracts"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
