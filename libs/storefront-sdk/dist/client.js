@@ -1,8 +1,20 @@
 import { z } from 'zod';
 import { CreateWebOrderDtoSchema, ProductSchema, ProductVariantSchema, STOREFRONT_API_VERSION, WebOrderStatusUpdatedPayloadSchema, } from '@yoeldevsoft25/store-contracts';
-const GetProductsResponseSchema = z.object({
-    items: z.array(ProductSchema),
-    total: z.number().int().nonnegative(),
+const GetPublicMenuRawResponseSchema = z.object({
+    success: z.boolean(),
+    store: z.object({
+        id: z.string().uuid(),
+        name: z.string(),
+        pickup_enabled: z.boolean(),
+        delivery_enabled: z.boolean(),
+    }),
+    menu: z.object({
+        categories: z.array(z.object({
+            name: z.string(),
+            products: z.array(ProductSchema),
+        })),
+    }),
+    exchange_rate: z.number(),
 });
 const CreateWebOrderResponseSchema = z.object({
     id: z.string().uuid(),
@@ -132,18 +144,27 @@ export class StorefrontClient {
         throw new Error('Request failed');
     }
     async getProducts(params = {}) {
-        const searchParams = new URLSearchParams();
-        if (params.limit !== undefined)
-            searchParams.set('limit', String(params.limit));
-        if (params.offset !== undefined)
-            searchParams.set('offset', String(params.offset));
-        if (params.search !== undefined)
-            searchParams.set('search', params.search);
-        if (params.category !== undefined)
-            searchParams.set('category', params.category);
-        const qs = searchParams.toString();
-        const path = `/public/menu/store/${this.storeId}${qs.length > 0 ? '?' + qs : ''}`;
-        return this.request('GET', path, { schema: GetProductsResponseSchema });
+        const raw = await this.request('GET', `/public/menu/store/${this.storeId}`, {
+            schema: GetPublicMenuRawResponseSchema,
+        });
+        let products = [];
+        for (const cat of raw.menu.categories) {
+            if (params.category && cat.name.toLowerCase() !== params.category.toLowerCase()) {
+                continue;
+            }
+            products.push(...cat.products);
+        }
+        if (params.search) {
+            const searchLower = params.search.toLowerCase();
+            products = products.filter((p) => p.name.toLowerCase().includes(searchLower) ||
+                (p.sku && p.sku.toLowerCase().includes(searchLower)) ||
+                (p.category && p.category.toLowerCase().includes(searchLower)));
+        }
+        const total = products.length;
+        const offset = params.offset ?? 0;
+        const limit = params.limit ?? 20;
+        const items = products.slice(offset, offset + limit);
+        return { items, total };
     }
     async getProduct(productId) {
         return this.request('GET', `/public/menu/store/${this.storeId}/products/${productId}`, {

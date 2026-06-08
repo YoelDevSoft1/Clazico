@@ -1,0 +1,593 @@
+'use client';
+
+import Link from 'next/link';
+import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { ArrowLeft, ArrowRight, CheckCircle, Loader2, Send } from 'lucide-react';
+import { useTRPC } from '@/lib/trpc-client';
+import { useSession } from '@/lib/auth-client';
+import { useCartStore } from '@/stores/cart.store';
+import { PAYMENT_DETAILS, VENEZUELAN_BANKS } from '@/lib/constants';
+import { formatBsS, formatUSD } from '@/lib/utils';
+import { cn } from '@/lib/utils';
+import { DeliveryLocationPicker } from '@/components/checkout/delivery-location-picker';
+
+type CreatedOrder = {
+  id: string;
+  orderNumber: string;
+};
+
+type PaymentMethod = 'pago_movil' | 'transferencia' | 'zelle' | 'efectivo_usd';
+type DeliveryMethod = 'PICKUP' | 'DELIVERY';
+
+const paymentLabels: Record<PaymentMethod, string> = {
+  pago_movil: 'Pago Móvil',
+  transferencia: 'Transferencia',
+  zelle: 'Zelle',
+  efectivo_usd: 'Efectivo USD',
+};
+
+export default function CheckoutPage() {
+  const trpc = useTRPC();
+  const { data: session } = useSession();
+  const items = useCartStore((state) => state.items);
+  const clearCart = useCartStore((state) => state.clearCart);
+  const subtotalUsd = useCartStore((state) => state.getSubtotalUsd());
+  const subtotalBs = useCartStore((state) => state.getSubtotalBs());
+
+  const [step, setStep] = useState<'details' | 'success'>('details');
+  const [createdOrder, setCreatedOrder] = useState<CreatedOrder | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [name, setName] = useState(session?.user?.name || '');
+  const [email, setEmail] = useState(session?.user?.email || '');
+  const [phone, setPhone] = useState('');
+  const [cedula, setCedula] = useState('');
+  const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>('PICKUP');
+  const [stateName, setStateName] = useState('Zulia');
+  const [cityName, setCityName] = useState('Maracaibo');
+  const [deliveryLocation, setDeliveryLocation] = useState({
+    lat: 10.6427,
+    lng: -71.6125,
+    address: 'Maracaibo, Zulia, Venezuela',
+  });
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pago_movil');
+  const [reference, setReference] = useState('');
+  const [originBank, setOriginBank] = useState('0134');
+  const [accountLastFour, setAccountLastFour] = useState('');
+
+  const createOrderMutation = useMutation(trpc.order.create.mutationOptions());
+  const submitPaymentMutation = useMutation(trpc.payment.submit.mutationOptions());
+
+  const rate = subtotalUsd > 0 ? subtotalBs / subtotalUsd : 36.715;
+  const isUsdPayment = paymentMethod === 'zelle' || paymentMethod === 'efectivo_usd';
+
+  const handlePlaceOrder = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (items.length === 0) return;
+
+    try {
+      setIsSubmitting(true);
+      const order = await createOrderMutation.mutateAsync({
+        items: items.map((item) => ({
+          productId: item.productId,
+          variantId: item.legacy ? undefined : item.variantId,
+          quantity: item.quantity,
+          unitPriceUsd: item.priceUsd,
+          unitPriceBs: item.priceBs,
+          size: item.size ?? undefined,
+          color: item.color ?? undefined,
+        })),
+        shippingAddressId: '00000000-0000-0000-0000-000000000000',
+        currency: isUsdPayment ? 'USD' : 'BS',
+        exchangeRate: rate,
+        paymentMethod,
+        deliveryMethod,
+        deliveryAddressText:
+          deliveryMethod === 'DELIVERY' ? deliveryLocation.address : undefined,
+        deliveryLat: deliveryMethod === 'DELIVERY' ? deliveryLocation.lat : undefined,
+        deliveryLng: deliveryMethod === 'DELIVERY' ? deliveryLocation.lng : undefined,
+        customerName: name,
+        customerEmail: email,
+        note:
+          deliveryMethod === 'DELIVERY'
+            ? `Envio a: ${stateName}, ${cityName}. ${deliveryLocation.address}. GPS ${deliveryLocation.lat}, ${deliveryLocation.lng}`
+            : 'Retiro en Tienda',
+        customerDocumentId: cedula,
+        customerPhone: phone,
+      });
+
+      setCreatedOrder(order);
+
+      if (paymentMethod !== 'efectivo_usd') {
+        const selectedBank = VENEZUELAN_BANKS.find((bank) => bank.code === originBank);
+        await submitPaymentMutation.mutateAsync({
+          orderId: order.id,
+          method: paymentMethod,
+          reference: reference || `REF-${Date.now().toString().slice(-8)}`,
+          amountUsd: subtotalUsd,
+          amountBs: subtotalBs,
+          exchangeRate: rate,
+          bankName: selectedBank?.name ?? 'Zelle',
+          accountLastFour: accountLastFour || '0000',
+          proofImageUrl: 'https://images.veloxpos.com/mock-receipt.jpg',
+        });
+      }
+
+      clearCart();
+      setStep('success');
+    } catch (error) {
+      console.error('Error placing order:', error);
+      alert('Error al registrar tu pedido. Verifica los datos e inténtalo nuevamente.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (step === 'success' && createdOrder) {
+    const totalString = isUsdPayment ? formatUSD(subtotalUsd) : formatBsS(subtotalBs);
+    const storePhone = '+584120000000';
+    const waText = `Hola Clazico Store. Pedido ${createdOrder.orderNumber} por ${totalString}. Método: ${paymentLabels[paymentMethod]}. Nombre: ${name}.`;
+    const waUrl = `https://wa.me/${storePhone.replace('+', '')}?text=${encodeURIComponent(waText)}`;
+
+    return (
+      <div className="store-shell grid min-h-[calc(100dvh-3.5rem)] place-items-center bg-zinc-950 py-10 text-white">
+        <div className="w-full max-w-md text-center border border-white/5 bg-zinc-900/30 p-8">
+          <div className="mx-auto grid h-16 w-16 place-items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 text-emerald-400 animate-fade-in">
+            <CheckCircle className="h-9 w-9" />
+          </div>
+          <h1 className="mt-6 font-outfit text-2xl font-black uppercase italic">Pedido Registrado</h1>
+          <p className="athletic-tag text-zinc-500 mt-2">
+            Orden <span className="font-mono font-black text-white">{createdOrder.orderNumber}</span>
+          </p>
+          <p className="mt-4 text-xs leading-6 text-zinc-400 uppercase tracking-wider font-bold">
+            Tu compra ha sido almacenada en nuestro sistema. Reporta el pago por WhatsApp para validar la transacción de inmediato.
+          </p>
+          <a
+            href={waUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 border border-[#25D366] bg-[#25D366] text-xs font-black uppercase tracking-widest text-white transition-colors hover:bg-transparent hover:text-[#25D366]"
+          >
+            <Send className="h-4 w-4" />
+            Enviar Comprobante
+          </a>
+          <Link href="/catalog" className="mt-5 inline-block text-xs font-black uppercase tracking-widest text-brand-primary hover:text-white transition-colors">
+            Volver al catálogo
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="store-shell grid min-h-[calc(100dvh-3.5rem)] place-items-center bg-zinc-950 text-center text-white">
+        <div>
+          <h1 className="font-outfit text-3xl font-black uppercase italic">Carrito Vacío</h1>
+          <p className="athletic-tag text-zinc-500 mt-2">Agrega productos para proceder al pago</p>
+          <Link
+            href="/catalog"
+            className="mt-6 inline-flex h-12 items-center justify-center gap-2 border border-white bg-white px-7 text-xs font-black uppercase tracking-widest text-zinc-950 hover:bg-transparent hover:text-white transition-colors"
+          >
+            Explorar catálogo
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-zinc-950 text-white pb-20 md:pb-32">
+      <div className="store-shell py-10 md:py-16">
+        <Link
+          href="/catalog"
+          className="inline-flex h-10 items-center gap-2 text-xs font-black uppercase tracking-widest text-zinc-400 hover:text-white transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Volver a la tienda
+        </Link>
+
+        <div className="mt-5 grid gap-8 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-start">
+          <form id="checkout-form" onSubmit={handlePlaceOrder} className="space-y-6">
+            <CheckoutSection title="1. Datos del Cliente">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Nombre Completo">
+                  <input
+                    required
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    className="checkout-input font-sans text-xs font-bold uppercase tracking-wider"
+                    placeholder="EJ: YOEL PINTO"
+                  />
+                </Field>
+                <Field label="Cédula de Identidad">
+                  <input
+                    required
+                    value={cedula}
+                    onChange={(event) => setCedula(event.target.value)}
+                    className="checkout-input font-mono text-xs font-bold uppercase tracking-wider"
+                    placeholder="EJ: V-12345678"
+                  />
+                </Field>
+                <Field label="Teléfono de Contacto (WhatsApp)">
+                  <input
+                    required
+                    type="tel"
+                    value={phone}
+                    onChange={(event) => setPhone(event.target.value)}
+                    className="checkout-input font-mono text-xs font-bold uppercase tracking-wider"
+                    placeholder="EJ: 04120000000"
+                  />
+                </Field>
+                <Field label="Correo Electrónico">
+                  <input
+                    required
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    className="checkout-input font-sans text-xs font-bold uppercase tracking-wider"
+                    placeholder="EJ: CLIENTE@CORREO.COM"
+                  />
+                </Field>
+              </div>
+            </CheckoutSection>
+
+            <CheckoutSection title="2. Método de Entrega">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <ChoiceCard
+                  active={deliveryMethod === 'PICKUP'}
+                  title="Retiro en Tienda"
+                  subtitle="Caracas, Altamira. Sin costo."
+                  onClick={() => setDeliveryMethod('PICKUP')}
+                />
+                <ChoiceCard
+                  active={deliveryMethod === 'DELIVERY'}
+                  title="Envío Nacional"
+                  subtitle="MRW, ZOOM o TEALCA. Cobro en destino."
+                  onClick={() => setDeliveryMethod('DELIVERY')}
+                />
+              </div>
+
+              {deliveryMethod === 'DELIVERY' && (
+                <div className="mt-4 grid gap-4 border border-white/5 bg-zinc-950 p-5 sm:grid-cols-2 animate-fade-in">
+                  <Field label="Estado">
+                    <input
+                      required
+                      value={stateName}
+                      onChange={(event) => setStateName(event.target.value)}
+                      className="checkout-input font-sans text-xs font-bold uppercase tracking-wider"
+                      placeholder="ZULIA"
+                    />
+                  </Field>
+                  <Field label="Ciudad">
+                    <input
+                      required
+                      value={cityName}
+                      onChange={(event) => setCityName(event.target.value)}
+                      className="checkout-input font-sans text-xs font-bold uppercase tracking-wider"
+                      placeholder="MARACAIBO"
+                    />
+                  </Field>
+                  <div className="sm:col-span-2">
+                    <div className="block">
+                      <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                        Ubicacion Exacta / Agencia de Envio
+                      </span>
+                      <DeliveryLocationPicker
+                        value={deliveryLocation}
+                        onChange={setDeliveryLocation}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CheckoutSection>
+
+            <CheckoutSection title="3. Registro de Pago">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {(Object.keys(paymentLabels) as PaymentMethod[]).map((method) => (
+                  <button
+                    key={method}
+                    type="button"
+                    onClick={() => setPaymentMethod(method)}
+                    className={cn(
+                      'min-h-[44px] border text-xs font-black uppercase tracking-wider transition-all rounded-none cursor-pointer',
+                      paymentMethod === method
+                        ? 'border-white bg-white text-zinc-950'
+                        : 'border-white/10 bg-transparent text-zinc-400 hover:border-white/30 hover:text-white',
+                    )}
+                  >
+                    {paymentLabels[method]}
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-4 border border-white/5 bg-zinc-950 p-5">
+                <PaymentInstructions
+                  paymentMethod={paymentMethod}
+                  reference={reference}
+                  setReference={setReference}
+                  originBank={originBank}
+                  setOriginBank={setOriginBank}
+                  accountLastFour={accountLastFour}
+                  setAccountLastFour={setAccountLastFour}
+                />
+              </div>
+            </CheckoutSection>
+          </form>
+
+          <aside className="lg:sticky lg:top-24">
+            <OrderSummary
+              items={items}
+              subtotalUsd={subtotalUsd}
+              subtotalBs={subtotalBs}
+              deliveryMethod={deliveryMethod}
+              isSubmitting={isSubmitting}
+            />
+          </aside>
+        </div>
+      </div>
+
+      {/* Mobile Sticky Action Bar */}
+      <div className="bottom-above-nav fixed inset-x-0 z-[110] border-t border-white/10 bg-zinc-950/95 p-4 backdrop-blur-xl md:hidden">
+        <button
+          form="checkout-form"
+          type="submit"
+          disabled={isSubmitting}
+          className="flex h-12 w-full items-center justify-center gap-2 border border-white bg-white text-xs font-black uppercase tracking-widest text-zinc-950 disabled:opacity-50"
+        >
+          {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin text-zinc-950" /> : null}
+          Completar compra
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CheckoutSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="border border-white/5 bg-zinc-900/30 p-5 sm:p-6">
+      <h2 className="mb-5 font-outfit text-lg font-black uppercase italic tracking-wider text-white border-b border-white/5 pb-3">
+        {title}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-zinc-500">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function ChoiceCard({
+  active,
+  title,
+  subtitle,
+  onClick,
+}: {
+  active: boolean;
+  title: string;
+  subtitle: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'min-h-[72px] border p-4 text-left transition-all cursor-pointer rounded-none',
+        active
+          ? 'border-white bg-white text-zinc-950'
+          : 'border-white/10 bg-transparent text-zinc-400 hover:border-white/30',
+      )}
+    >
+      <span className={cn('block text-xs font-black uppercase tracking-wider', active ? 'text-zinc-950' : 'text-white')}>{title}</span>
+      <span className={cn('mt-1 block text-[10px] uppercase font-bold tracking-wide leading-relaxed', active ? 'text-zinc-600' : 'text-zinc-500')}>{subtitle}</span>
+    </button>
+  );
+}
+
+function PaymentInstructions({
+  paymentMethod,
+  reference,
+  setReference,
+  originBank,
+  setOriginBank,
+  accountLastFour,
+  setAccountLastFour,
+}: {
+  paymentMethod: PaymentMethod;
+  reference: string;
+  setReference: (value: string) => void;
+  originBank: string;
+  setOriginBank: (value: string) => void;
+  accountLastFour: string;
+  setAccountLastFour: (value: string) => void;
+}) {
+  if (paymentMethod === 'efectivo_usd') {
+    return (
+      <p className="text-xs uppercase tracking-wider font-bold leading-6 text-zinc-400">
+        Pagas en divisas en efectivo al retirar en tienda o al recibir delivery. Por favor, lleva el monto exacto para agilizar la entrega.
+      </p>
+    );
+  }
+
+  const isZelle = paymentMethod === 'zelle';
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 text-xs uppercase tracking-wider font-bold text-zinc-400 sm:grid-cols-2">
+        {paymentMethod === 'zelle' ? (
+          <>
+            <p>
+              Email Zelle: <span className="font-mono font-black text-white">{PAYMENT_DETAILS.ZELLE.email}</span>
+            </p>
+            <p>
+              Titular: <span className="font-black text-white">{PAYMENT_DETAILS.ZELLE.holder}</span>
+            </p>
+          </>
+        ) : paymentMethod === 'transferencia' ? (
+          <>
+            <p>
+              Banco: <span className="font-black text-white">{PAYMENT_DETAILS.TRANSFER.bank}</span>
+            </p>
+            <p>
+              Cuenta Corriente: <span className="font-mono font-black text-white">{PAYMENT_DETAILS.TRANSFER.accountNumber}</span>
+            </p>
+            <p>
+              Titular: <span className="font-black text-white">{PAYMENT_DETAILS.TRANSFER.holder}</span>
+            </p>
+            <p>
+              RIF: <span className="font-mono font-black text-white">{PAYMENT_DETAILS.TRANSFER.rif}</span>
+            </p>
+          </>
+        ) : (
+          <>
+            <p>
+              Banco: <span className="font-black text-white">{PAYMENT_DETAILS.PAGO_MOVIL.bank}</span>
+            </p>
+            <p>
+              Teléfono: <span className="font-mono font-black text-white">{PAYMENT_DETAILS.PAGO_MOVIL.phone}</span>
+            </p>
+            <p>
+              Cédula / RIF: <span className="font-mono font-black text-white">{PAYMENT_DETAILS.PAGO_MOVIL.rif}</span>
+            </p>
+          </>
+        )}
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 border-t border-white/5 pt-4">
+        {!isZelle && (
+          <Field label="Banco Emisor">
+            <select
+              value={originBank}
+              onChange={(event) => setOriginBank(event.target.value)}
+              className="checkout-input font-sans text-xs font-bold uppercase tracking-wider"
+            >
+              {VENEZUELAN_BANKS.map((bank) => (
+                <option key={bank.code} value={bank.code} className="bg-zinc-950 text-white">
+                  {bank.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+        <Field label={isZelle ? 'Email o Nombre de la Cuenta' : 'Número de Referencia'}>
+          <input
+            required
+            value={reference}
+            onChange={(event) => setReference(event.target.value)}
+            className="checkout-input font-mono text-xs font-bold uppercase tracking-wider"
+            placeholder={isZelle ? 'EJ: CLIENTE@CORREO.COM' : 'EJ: 12345678'}
+          />
+        </Field>
+        {isZelle && (
+          <Field label="Últimos 4 Dígitos del Teléfono / Tarjeta">
+            <input
+              value={accountLastFour}
+              onChange={(event) => setAccountLastFour(event.target.value)}
+              className="checkout-input font-mono text-xs font-bold uppercase tracking-wider"
+              placeholder="EJ: 1234"
+            />
+          </Field>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function OrderSummary({
+  items,
+  subtotalUsd,
+  subtotalBs,
+  deliveryMethod,
+  isSubmitting,
+}: {
+  items: ReturnType<typeof useCartStore.getState>['items'];
+  subtotalUsd: number;
+  subtotalBs: number;
+  deliveryMethod: DeliveryMethod;
+  isSubmitting: boolean;
+}) {
+  return (
+    <div className="border border-white/5 bg-zinc-900/30 p-5 sm:p-6 shadow-2xl">
+      <h2 className="font-outfit text-lg font-black uppercase italic tracking-wider text-white border-b border-white/5 pb-3 mb-4">
+        Resumen
+      </h2>
+      <div className="max-h-72 space-y-4 overflow-y-auto pr-1 no-scrollbar divide-y divide-white/5">
+        {items.map((item, idx) => (
+          <div key={item.variantId} className={cn("flex gap-3", idx > 0 && "pt-3")}>
+            <div className="min-w-0 flex-1">
+              <p className="line-clamp-2 text-xs font-black uppercase tracking-tight text-white">{item.name}</p>
+              <p className="mt-1 text-[10px] font-black uppercase tracking-wider text-zinc-500">
+                {item.size ? `Talla ${item.size}` : 'Talla única'}
+                {item.color ? ` · ${item.color}` : ''} · x{item.quantity}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="font-mono text-xs font-black text-white">
+                {formatUSD(item.priceUsd * item.quantity)}
+              </p>
+              <p className="font-mono text-[10px] text-zinc-500">
+                {formatBsS(item.priceBs * item.quantity)}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-5 space-y-3 border-t border-white/5 pt-5">
+        <SummaryLine label="Subtotal" value={formatUSD(subtotalUsd)} strong />
+        {deliveryMethod === 'DELIVERY' && (
+          <SummaryLine label="Envío" value="Por cobrar" accent />
+        )}
+        <SummaryLine label="Total Bs" value={formatBsS(subtotalBs)} />
+      </div>
+
+      <button
+        form="checkout-form"
+        type="submit"
+        disabled={isSubmitting}
+        className="mt-6 hidden h-12 w-full items-center justify-center gap-2 border border-white bg-white text-xs font-black uppercase tracking-widest text-zinc-950 transition-all hover:bg-transparent hover:text-white disabled:opacity-50 md:flex cursor-pointer"
+      >
+        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin text-zinc-950" /> : null}
+        Completar compra
+      </button>
+    </div>
+  );
+}
+
+function SummaryLine({
+  label,
+  value,
+  strong,
+  accent,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+  accent?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <span className={cn('text-[10px] font-black uppercase tracking-wider', strong ? 'text-white' : 'text-zinc-500')}>
+        {label}
+      </span>
+      <span
+        className={cn(
+          'font-mono text-xs font-black',
+          accent ? 'text-brand-primary' : strong ? 'text-white' : 'text-zinc-400',
+        )}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
