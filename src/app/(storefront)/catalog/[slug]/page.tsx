@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { use, useMemo, useState } from 'react';
+import { use, useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -28,6 +28,7 @@ type AccordionProps = {
 
 interface PDPVariant {
   id: string;
+  veloxVariantId: string;
   sku: string | null;
   size: string | null;
   color: string | null;
@@ -252,7 +253,7 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
     // a deterministic synthetic variant id derived from product+slug.
     const cartItem: Omit<CartItem, 'quantity'> = selectedVariant
       ? {
-          variantId: selectedVariant.id,
+          variantId: selectedVariant.veloxVariantId,
           productId: product.veloxId,
           name: product.name,
           sku: selectedVariant.sku ?? product.sku,
@@ -283,13 +284,9 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
     addItem({ ...cartItem, quantity: 1 });
   };
 
-  // If a legacy cart item is present for this product (variantId starting
-  // with "legacy::"), sync it on first render of the PDP so the user can
-  // resume checkout seamlessly.
-  useLegacyCartMigration(product, syncLegacyItem);
-
   return (
     <div className="bg-zinc-950 text-white">
+      <LegacyCartMigration product={product} syncLegacyItem={syncLegacyItem} />
       <div className="store-shell pt-8 md:pt-16">
         <Link
           href="/catalog"
@@ -529,10 +526,13 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
  * sync it once to the canonical v2 shape using the freshly loaded
  * product. We pick the first in-stock variant for the auto-sync target.
  */
-function useLegacyCartMigration(
-  product: PDPProduct | null | undefined,
-  syncLegacyItem: (legacyKey: string, next: CartItem) => void,
-) {
+function LegacyCartMigration({
+  product,
+  syncLegacyItem,
+}: {
+  product: PDPProduct | null | undefined;
+  syncLegacyItem: (legacyKey: string, next: CartItem) => void;
+}) {
   if (!product || !product.veloxId) return;
   // The actual migration runs from a useEffect in a child component to
   // satisfy the rules of hooks; this no-op wrapper keeps the JSX above
@@ -551,7 +551,7 @@ function LegacyCartSyncEffect({
   // Run once after mount when the variants are available. The effect
   // re-checks items on every render but only mutates when a legacy key
   // for the current product is found.
-  useMemo(() => {
+  useEffect(() => {
     if (!product.veloxId) return;
     const legacyKey = `legacy::${product.veloxId}__`;
     const legacy = items.find((it) => it.variantId.startsWith(legacyKey) || it.variantId === `legacy::${product.veloxId}__`);
@@ -559,7 +559,7 @@ function LegacyCartSyncEffect({
     const firstInStock = (product.variants ?? []).find((v) => v.currentStock > 0 && v.isActive);
     if (!firstInStock) return;
     syncLegacyItem(legacy.variantId, {
-      variantId: firstInStock.id,
+      variantId: firstInStock.veloxVariantId,
       productId: product.veloxId,
       name: product.name,
       sku: firstInStock.sku ?? product.sku,

@@ -11,43 +11,44 @@ import { StorefrontSourceSchema } from './sources';
 
 export const WebOrderItemSchema = z.object({
   product_id: z.string().uuid().optional(),
-  variant_id: z.string().uuid().optional(),
+  variant_id: z.string().uuid().nullable().optional(),
   menu_item_id: z.string().uuid().optional(),
   sku: z.string().nullable().optional(),
   name: z.string().min(1),
   quantity: z.number().int().positive(),
   unit_price_usd: z.number().nonnegative(),
-  unit_price_bs: z.number().nonnegative().nullable().optional(),
+  unit_price_bs: z.number().nonnegative(),
   size: z.string().nullable().optional(),
   color: z.string().nullable().optional(),
-  notes: z.string().nullable().optional(),
 }).refine(
   (item) => {
-    // Exactly one of product_id, menu_item_id, or variant_id must be present
-    const ids = [item.product_id, item.variant_id, item.menu_item_id].filter(Boolean);
-    return ids.length === 1;
+    const hasProduct = Boolean(item.product_id);
+    const hasMenuItem = Boolean(item.menu_item_id);
+    return hasProduct !== hasMenuItem && (!item.variant_id || hasProduct);
   },
-  { message: 'Exactly one of product_id, variant_id, or menu_item_id must be present' }
+  {
+    message:
+      'Provide exactly one of product_id or menu_item_id; variant_id requires product_id',
+  },
 );
 export type WebOrderItem = z.infer<typeof WebOrderItemSchema>;
 
 export const WebOrderCustomerSchema = z.object({
   name: z.string().min(1).max(200),
   email: z.string().email().nullable().optional(),
-  phone: z.string().min(7).max(20),
+  phone: z.string().min(7).max(20).nullable().optional(),
   document_id: z.string().nullable().optional(),  // V-/E-/J- RIF
 });
 export type WebOrderCustomer = z.infer<typeof WebOrderCustomerSchema>;
 
 export const WebOrderDeliverySchema = z.object({
-  method: z.enum(['PICKUP', 'DELIVERY', 'TAKEAWAY']),
-  state: z.string().optional(),
-  city: z.string().optional(),
-  address_line: z.string().optional(),
-  lat: z.number().optional(),
-  lng: z.number().optional(),
-  map_provider: z.string().optional(),
-  notes: z.string().optional(),
+  state: z.string().nullable().optional(),
+  city: z.string().nullable().optional(),
+  address_line: z.string().nullable().optional(),
+  lat: z.number().nullable().optional(),
+  lng: z.number().nullable().optional(),
+  map_provider: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
 });
 export type WebOrderDelivery = z.infer<typeof WebOrderDeliverySchema>;
 
@@ -59,37 +60,47 @@ export const WebOrderPaymentSchema = z.object({
     'BINANCE',
     'CASH_USD',
     'CASH_BS',
+    'CASH_BSS',
     'CARD',
     'OTHER',
-  ]),
-  reference: z.string().optional(),
-  bank: z.string().optional(),
-  currency: z.enum(['USD', 'BS']),
-  amount_usd: z.number().nonnegative(),
-  amount_bs: z.number().nonnegative().optional(),
-  reported_at: z.string().datetime().optional(),
+  ]).nullable().optional(),
+  reference: z.string().nullable().optional(),
+  bank: z.string().nullable().optional(),
+  currency: z.enum(['USD', 'BS', 'BSS']).nullable().optional(),
+  amount_usd: z.number().nonnegative().nullable().optional(),
+  amount_bs: z.number().nonnegative().nullable().optional(),
+  reported_at: z.string().datetime().nullable().optional(),
+  verified_at: z.string().datetime().nullable().optional(),
 });
 export type WebOrderPayment = z.infer<typeof WebOrderPaymentSchema>;
 
-export const WebOrderKindSchema = z.enum(['product', 'menu_item']);
-
 export const CreateWebOrderDtoSchema = z.object({
-  kind: WebOrderKindSchema.default('product'),
-  source: StorefrontSourceSchema,
+  source: StorefrontSourceSchema.optional(),
   external_order_id: z.string().min(1).max(100),
   external_order_number: z.string().min(1).max(50).optional(),
   status: z
-    .enum(['PENDING_PAYMENT', 'PAYMENT_REPORTED', 'PAYMENT_VERIFIED', 'CANCELLED'])
+    .enum([
+      'PENDING_PAYMENT',
+      'PAYMENT_REPORTED',
+      'PAYMENT_VERIFIED',
+      'PREPARING',
+      'READY_FOR_PICKUP',
+      'SHIPPED',
+      'DELIVERED',
+      'CANCELLED',
+      'REJECTED',
+    ])
     .default('PENDING_PAYMENT'),
   customer: WebOrderCustomerSchema,
   items: z.array(WebOrderItemSchema).min(1),
   subtotal_usd: z.number().nonnegative(),
   total_usd: z.number().nonnegative(),
-  total_bs: z.number().nonnegative().optional(),
-  exchange_rate: z.number().positive().optional(),
-  delivery: WebOrderDeliverySchema.optional(),
-  payment: WebOrderPaymentSchema.optional(),
-  notes: z.string().max(1000).optional(),
+  total_bs: z.number().nonnegative(),
+  exchange_rate: z.number().positive(),
+  delivery_method: z.enum(['PICKUP', 'DELIVERY']),
+  delivery: WebOrderDeliverySchema.nullable().optional(),
+  payment: WebOrderPaymentSchema.nullable().optional(),
+  notes: z.string().max(1000).nullable().optional(),
 });
 export type CreateWebOrderDto = z.infer<typeof CreateWebOrderDtoSchema>;
 

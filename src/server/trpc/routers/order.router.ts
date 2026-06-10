@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, or, sql } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { randomUUID } from 'crypto';
 import * as schema from '@/../drizzle/schema';
@@ -16,6 +16,7 @@ import {
   listOrdersSchema,
 } from '@/schemas/order.schema';
 import { orderNumberService } from '@/server/services/order-number.service';
+import type { VeloxWebOrderPayload } from '@/server/services/velox-pos.service';
 
 export const orderRouter = createTRPCRouter({
   /**
@@ -34,26 +35,46 @@ export const orderRouter = createTRPCRouter({
   create: publicProcedure
     .input(createOrderSchema)
     .mutation(async ({ ctx, input }) => {
+      let exchangeRate: number;
+      try {
+        exchangeRate = await ctx.veloxService.getCurrentExchangeRate();
+      } catch (error) {
+        throw new TRPCError({
+          code: 'SERVICE_UNAVAILABLE',
+          message: `No se pudo consultar la tasa vigente de Velox: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        });
+      }
+
+      const resolvedItems = await resolveOrderItems(ctx, input, exchangeRate);
+
       // 1) Stock re-validation. Each item can have a variantId; we
       //    call Velox for the parent product and (when relevant) the
       //    variant. A 4xx from Velox here means the storefront cache
       //    is stale — we reject the order with a friendly message.
-      for (const item of input.items) {
+      for (const item of resolvedItems) {
         try {
           const stock = await ctx.veloxService.getStock(
             item.productId,
-            item.variantId,
+            item.veloxVariantId ?? undefined,
           );
           if (stock.current_stock < item.quantity) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
               message: `Stock insuficiente para ${item.productId}${
-                item.variantId ? ` (variante ${item.variantId})` : ''
+                item.veloxVariantId ? ` (variante ${item.veloxVariantId})` : ''
               }. Disponible: ${stock.current_stock}, solicitado: ${item.quantity}`,
             });
           }
         } catch (error) {
           if (error instanceof TRPCError) throw error;
+          throw new TRPCError({
+            code: 'SERVICE_UNAVAILABLE',
+            message: `No se pudo validar el stock en Velox: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          });
           // If Velox is unreachable, we still allow the order to be
           // recorded locally — the outbox worker will retry stock
           // verification when it pushes to Velox.
@@ -65,87 +86,18 @@ export const orderRouter = createTRPCRouter({
 
       // Calculate totals
       let subtotalUsd = 0;
-      for (const item of input.items) {
+      for (const item of resolvedItems) {
         subtotalUsd += item.unitPriceUsd * item.quantity;
       }
 
       // In this version, discount is 0 by default, total = subtotal
       const totalUsd = subtotalUsd;
-      const totalBss = totalUsd * input.exchangeRate;
+      const totalBss = Number((totalUsd * exchangeRate).toFixed(2));
 
       // Generate a single idempotency key for the order. This is
       // propagated to Velox and also used as the outbox row key.
       const idempotencyKey = randomUUID();
 
-      // Insert the order
-      const [order] = await ctx.db
-        .insert(schema.orders)
-        .values({
-          orderNumber,
-          customerId,
-          status: 'PENDING',
-          subtotalUsd: String(subtotalUsd),
-          discountUsd: '0',
-          totalUsd: String(totalUsd),
-          totalBss: String(totalBss),
-          exchangeRateUsed: String(input.exchangeRate),
-          shippingAddressId: normalizeOptionalUuid(input.shippingAddressId),
-          deliveryMethod: input.deliveryMethod,
-          deliveryAddressText: input.deliveryAddressText ?? null,
-          deliveryLat:
-            input.deliveryLat === undefined ? null : String(input.deliveryLat),
-          deliveryLng:
-            input.deliveryLng === undefined ? null : String(input.deliveryLng),
-          customerNotes: input.note ?? null,
-          idempotencyKey,
-        })
-        .returning();
-
-      if (!order) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'No se pudo crear el pedido',
-        });
-      }
-
-      // Insert order items (now persists variantId / variantSku)
-      await ctx.db.insert(schema.orderItems).values(
-        await Promise.all(
-          input.items.map(async (item) => {
-            const [product] = await ctx.db
-              .select({
-                name: schema.productCache.name,
-                sku: schema.productCache.sku,
-              })
-              .from(schema.productCache)
-              .where(eq(schema.productCache.veloxId, item.productId))
-              .limit(1);
-
-            const [variant] = item.variantId
-              ? await ctx.db
-                  .select({ sku: schema.productVariants.sku })
-                  .from(schema.productVariants)
-                  .where(eq(schema.productVariants.id, item.variantId))
-                  .limit(1)
-              : [];
-
-            return {
-              orderId: order.id,
-              veloxProductId: item.productId,
-              variantId: item.variantId ?? null,
-              variantSku: variant?.sku ?? null,
-              productName: product?.name ?? item.productId,
-              productSku: product?.sku ?? item.variantId ?? 'DEFAULT-SKU',
-              quantity: item.quantity,
-              unitPriceUsd: String(item.unitPriceUsd),
-              unitPriceBs: String(item.unitPriceBs),
-              totalUsd: String(item.unitPriceUsd * item.quantity),
-            };
-          }),
-        ),
-      );
-
-      // Create a pending payment log if method is selected
       const methodMap: Record<string, 'PAGO_MOVIL' | 'TRANSFER' | 'ZELLE' | 'CASH_USD' | 'CASH_BSS' | 'BINANCE'> = {
         pago_movil: 'PAGO_MOVIL',
         transferencia: 'TRANSFER',
@@ -155,27 +107,130 @@ export const orderRouter = createTRPCRouter({
       };
 
       const dbMethod = methodMap[input.paymentMethod] ?? 'CASH_USD';
+      const paymentAmount = input.currency === 'USD' ? totalUsd : totalBss;
+      const paymentCurrency = input.currency === 'USD' ? 'USD' : 'BSS';
 
-      await ctx.db.insert(schema.payments).values({
-        orderId: order.id,
-        method: dbMethod,
-        amount: String(input.currency === 'USD' ? totalUsd : totalBss),
-        currency: input.currency === 'USD' ? 'USD' : 'BSS',
-        status: 'PENDING',
+      return ctx.db.transaction(async (tx) => {
+        const [order] = await tx
+          .insert(schema.orders)
+          .values({
+            orderNumber,
+            customerId,
+            status: 'PENDING',
+            subtotalUsd: String(subtotalUsd),
+            discountUsd: '0',
+            totalUsd: String(totalUsd),
+            totalBss: String(totalBss),
+            exchangeRateUsed: String(exchangeRate),
+            shippingAddressId: normalizeOptionalUuid(input.shippingAddressId),
+            deliveryMethod: input.deliveryMethod,
+            deliveryAddressText: input.deliveryAddressText ?? null,
+            deliveryLat:
+              input.deliveryLat === undefined ? null : String(input.deliveryLat),
+            deliveryLng:
+              input.deliveryLng === undefined ? null : String(input.deliveryLng),
+            customerNotes: input.note ?? null,
+            idempotencyKey,
+          })
+          .returning();
+
+        if (!order) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'No se pudo crear el pedido',
+          });
+        }
+
+        await tx.insert(schema.orderItems).values(
+          resolvedItems.map((item) => ({
+            orderId: order.id,
+            veloxProductId: item.productId,
+            variantId: item.veloxVariantId,
+            variantSku: item.variantSku,
+            productName: item.productName,
+            productSku: item.productSku,
+            quantity: item.quantity,
+            unitPriceUsd: String(item.unitPriceUsd),
+            unitPriceBs: String(item.unitPriceBs),
+            totalUsd: String(item.unitPriceUsd * item.quantity),
+          })),
+        );
+
+        await tx.insert(schema.payments).values({
+          orderId: order.id,
+          method: dbMethod,
+          amount: String(paymentAmount),
+          currency: paymentCurrency,
+          status: 'PENDING',
+        });
+
+        const payload: VeloxWebOrderPayload = {
+          source: 'clazico',
+          external_order_id: order.id,
+          external_order_number: order.orderNumber,
+          status: 'PENDING_PAYMENT',
+          customer: {
+            name: input.customerName,
+            email: input.customerEmail,
+            phone: input.customerPhone ?? null,
+            document_id: input.customerDocumentId ?? null,
+          },
+          items: resolvedItems.map((item) => ({
+            product_id: item.productId,
+            variant_id: item.veloxVariantId ?? undefined,
+            sku: item.variantSku ?? item.productSku,
+            name: item.productName,
+            quantity: item.quantity,
+            unit_price_usd: item.unitPriceUsd,
+            unit_price_bs: item.unitPriceBs,
+          })),
+          subtotal_usd: subtotalUsd,
+          total_usd: totalUsd,
+          total_bs: totalBss,
+          exchange_rate: exchangeRate,
+          delivery_method: input.deliveryMethod,
+          delivery: {
+            state: null,
+            city: null,
+            address_line: input.deliveryAddressText ?? null,
+            lat: input.deliveryLat ?? null,
+            lng: input.deliveryLng ?? null,
+            map_provider:
+              input.deliveryLat !== undefined && input.deliveryLng !== undefined
+                ? 'openstreetmap'
+                : null,
+            notes: input.note ?? null,
+          },
+          payment: {
+            method: dbMethod === 'CASH_BSS' ? 'CASH_BS' : dbMethod,
+            reference: null,
+            bank: null,
+            currency: paymentCurrency === 'BSS' ? 'BS' : paymentCurrency,
+            amount_usd: input.currency === 'USD' ? paymentAmount : totalUsd,
+            amount_bs: input.currency === 'BS' ? paymentAmount : totalBss,
+            reported_at: null,
+          },
+          notes: input.note ?? null,
+        };
+
+        await tx.insert(schema.outbox).values({
+          type: 'web_order.upsert',
+          aggregateId: order.id,
+          payload: payload as unknown as Record<string, unknown>,
+          idempotencyKey,
+          status: 'pending',
+          attempts: 0,
+          maxAttempts: 10,
+          nextAttemptAt: new Date(),
+        });
+
+        await tx.insert(schema.ordersSync).values({
+          orderId: order.id,
+          syncStatus: 'pending',
+        });
+
+        return order;
       });
-
-      // Enqueue the Velox sync via the outbox. The outbox worker is
-      // responsible for actually POSTing to Velox with the
-      // `Idempotency-Key` header. This handler returns 201
-      // immediately so the customer can move to payment without
-      // waiting on Velox.
-      const { enqueueWebOrderUpsert } = await import('@/server/services/outbox-worker');
-      await enqueueWebOrderUpsert({
-        orderId: order.id,
-        idempotencyKey,
-      });
-
-      return order;
     }),
 
   /**
@@ -451,4 +506,88 @@ function normalizeOptionalUuid(value: string | undefined): string | null {
   }
 
   return value;
+}
+
+interface ResolvedOrderItem {
+  productId: string;
+  veloxVariantId: string | null;
+  variantSku: string | null;
+  productName: string;
+  productSku: string;
+  quantity: number;
+  unitPriceUsd: number;
+  unitPriceBs: number;
+}
+
+async function resolveOrderItems(
+  ctx: TRPCContext,
+  input: z.infer<typeof createOrderSchema>,
+  exchangeRate: number,
+): Promise<ResolvedOrderItem[]> {
+  const resolved: ResolvedOrderItem[] = [];
+
+  for (const item of input.items) {
+    const [product] = await ctx.db
+      .select()
+      .from(schema.productCache)
+      .where(
+        and(
+          eq(schema.productCache.veloxId, item.productId),
+          eq(schema.productCache.isActive, true),
+        ),
+      )
+      .limit(1);
+
+    if (!product) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `El producto ${item.productId} ya no está disponible`,
+      });
+    }
+
+    const requestedVariantId =
+      item.variantId &&
+      !item.variantId.startsWith('product::') &&
+      !item.variantId.startsWith('legacy::')
+        ? item.variantId
+        : null;
+
+    const [variant] = requestedVariantId
+      ? await ctx.db
+          .select()
+          .from(schema.productVariants)
+          .where(
+            and(
+              eq(schema.productVariants.productCacheId, product.id),
+              eq(schema.productVariants.isActive, true),
+              or(
+                eq(schema.productVariants.id, requestedVariantId),
+                eq(schema.productVariants.veloxVariantId, requestedVariantId),
+              ),
+            ),
+          )
+          .limit(1)
+      : [];
+
+    if (requestedVariantId && !variant) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `La variante ${requestedVariantId} ya no está disponible`,
+      });
+    }
+
+    const unitPriceUsd = Number(variant?.priceUsdOverride ?? product.priceUsd);
+    resolved.push({
+      productId: product.veloxId,
+      veloxVariantId: variant?.veloxVariantId ?? null,
+      variantSku: variant?.sku ?? null,
+      productName: product.name,
+      productSku: product.sku,
+      quantity: item.quantity,
+      unitPriceUsd,
+      unitPriceBs: Number((unitPriceUsd * exchangeRate).toFixed(2)),
+    });
+  }
+
+  return resolved;
 }

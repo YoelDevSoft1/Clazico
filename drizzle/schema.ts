@@ -337,7 +337,7 @@ export const orders = pgTable(
     index("orders_customer_id_idx").on(table.customerId),
     index("orders_status_idx").on(table.status),
     index("orders_velox_sale_id_idx").on(table.veloxSaleId),
-    index("orders_idempotency_key_idx").on(table.idempotencyKey),
+    uniqueIndex("orders_idempotency_key_idx").on(table.idempotencyKey),
     index("orders_created_at_idx").on(table.createdAt),
   ]
 );
@@ -439,6 +439,7 @@ export const ordersSync = pgTable("orders_sync", {
   orderId: uuid("order_id")
     .primaryKey()
     .references(() => orders.id, { onDelete: "cascade" }),
+  veloxWebOrderId: uuid("velox_web_order_id"),
   veloxSaleId: uuid("velox_sale_id"),
   lastSyncAttemptAt: timestamp("last_sync_attempt_at", { withTimezone: true }),
   lastSyncError: text("last_sync_error"),
@@ -480,7 +481,7 @@ export const outbox = pgTable(
       table.nextAttemptAt,
     ),
     index("outbox_aggregate_id_idx").on(table.aggregateId),
-    index("outbox_idempotency_key_idx").on(table.idempotencyKey),
+    uniqueIndex("outbox_idempotency_key_idx").on(table.idempotencyKey),
   ],
 );
 

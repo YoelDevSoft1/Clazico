@@ -8,14 +8,23 @@ export async function GET(req: Request) {
     const authHeader = req.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
 
-    // Optional authorization check if CRON_SECRET is configured
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    if (!cronSecret) {
+      return NextResponse.json(
+        { error: 'CRON_SECRET is not configured' },
+        { status: 500 },
+      );
+    }
+
+    if (authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { productSyncService } = await import('@/server/services/product-sync.service');
     const result = await productSyncService.syncAll();
-    return NextResponse.json({ success: true, ...result });
+    return NextResponse.json(
+      { success: result.errors.length === 0, ...result },
+      { status: result.errors.length === 0 ? 200 : 502 },
+    );
   } catch (error) {
     console.error('Product sync cron error:', error);
     return NextResponse.json(

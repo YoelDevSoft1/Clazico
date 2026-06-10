@@ -54,7 +54,7 @@ export const metadata: Metadata = {
   creator: "Clazico Store",
   publisher: "Clazico Store",
   metadataBase: new URL(
-    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:40932"
   ),
   manifest: "/manifest.json",
   appleWebApp: {

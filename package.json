@@ -8,6 +8,8 @@
     "build:netlify": "drizzle-kit push --force && next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit --incremental false",
+    "integration:check": "node scripts/check-velox-integration.mjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",

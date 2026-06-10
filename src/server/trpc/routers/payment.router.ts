@@ -116,9 +116,11 @@ export const paymentRouter = createTRPCRouter({
         notes: 'Comprobante de pago subido por el cliente',
       });
 
-      const { webOrderSyncService } = await import('@/server/services/web-order-sync.service');
-      webOrderSyncService.syncOrder(input.orderId, 'PAYMENT_REPORTED').catch((error) => {
-        console.error('Failed to sync reported web order payment to Velox:', error);
+      const { enqueueWebOrderUpsert } = await import('@/server/services/outbox-worker');
+      await enqueueWebOrderUpsert({
+        orderId: input.orderId,
+        idempotencyKey: `${input.orderId}:PAYMENT_REPORTED`,
+        status: 'PAYMENT_REPORTED',
       });
 
       return payment;
@@ -356,8 +358,8 @@ function extractVeloxSaleId(response: unknown): string | null {
     return String(response.sale_id);
   }
 
-  if ('id' in response && response.id) {
-    return String(response.id);
+  if ('velox_sale_id' in response && response.velox_sale_id) {
+    return String(response.velox_sale_id);
   }
 
   if ('order' in response && typeof response.order === 'object' && response.order !== null) {

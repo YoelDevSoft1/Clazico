@@ -91,10 +91,10 @@ class WebOrderSyncService {
       },
       payment: latestPayment
         ? {
-          method: latestPayment.method,
+          method: latestPayment.method === 'CASH_BSS' ? 'CASH_BS' : latestPayment.method,
           reference: latestPayment.referenceNumber,
           bank: latestPayment.bank,
-          currency: latestPayment.currency,
+          currency: latestPayment.currency === 'BSS' ? 'BS' : latestPayment.currency,
           amount_usd: latestPayment.currency === 'USD' ? Number(latestPayment.amount) : Number(order.totalUsd),
           amount_bs: latestPayment.currency === 'BSS' ? Number(latestPayment.amount) : Number(order.totalBss ?? 0),
           reported_at: latestPayment.createdAt?.toISOString?.() ?? null,
@@ -106,7 +106,7 @@ class WebOrderSyncService {
 
   async syncOrder(orderId: string, status: WebOrderSyncStatus): Promise<void> {
     const payload = await this.buildPayload(orderId, status);
-    await veloxPosService.upsertWebOrder(payload, orderId);
+    await veloxPosService.upsertWebOrder(payload, `${orderId}:${status}`);
   }
 }
 

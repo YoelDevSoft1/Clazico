@@ -1,5 +1,6 @@
 import 'server-only';
-import { and, eq, lt, sql } from 'drizzle-orm';
+import { and, eq, lt, lte, sql } from 'drizzle-orm';
+import { StorefrontApiError } from '@yoeldevsoft25/storefront-sdk';
 import { db } from '@/server/db';
 import * as schema from '@/../drizzle/schema';
 import {
@@ -19,6 +20,7 @@ export interface OutboxProcessResult {
 export interface EnqueueWebOrderParams {
   orderId: string;
   idempotencyKey: string;
+  status?: NonNullable<VeloxWebOrderPayload['status']>;
 }
 
 // ─── Outbox helpers (DB-level) ────────────────────────────────────────────────
@@ -36,19 +38,25 @@ export async function enqueueWebOrderUpsert(
 ): Promise<void> {
   // Build the payload from the current order state.
   const { webOrderSyncService } = await import('./web-order-sync.service');
-  const payload = await webOrderSyncService.buildPayload(params.orderId, 'PENDING_PAYMENT');
+  const payload = await webOrderSyncService.buildPayload(
+    params.orderId,
+    params.status ?? 'PENDING_PAYMENT',
+  );
 
   await db.transaction(async (tx) => {
-    await tx.insert(schema.outbox).values({
-      type: 'web_order.upsert',
-      aggregateId: params.orderId,
-      payload: payload as unknown as Record<string, unknown>,
-      idempotencyKey: params.idempotencyKey,
-      status: 'pending',
-      attempts: 0,
-      maxAttempts: 10,
-      nextAttemptAt: new Date(),
-    });
+    await tx
+      .insert(schema.outbox)
+      .values({
+        type: 'web_order.upsert',
+        aggregateId: params.orderId,
+        payload: payload as unknown as Record<string, unknown>,
+        idempotencyKey: params.idempotencyKey,
+        status: 'pending',
+        attempts: 0,
+        maxAttempts: 10,
+        nextAttemptAt: new Date(),
+      })
+      .onConflictDoNothing({ target: schema.outbox.idempotencyKey });
 
     await tx
       .insert(schema.ordersSync)
@@ -82,19 +90,7 @@ export class OutboxWorker {
   async processPending(): Promise<OutboxProcessResult> {
     const result: OutboxProcessResult = { processed: 0, failed: 0, skipped: 0 };
 
-    // Acquire a small batch of due rows under row-level locks.
-    const pending = await db
-      .select()
-      .from(schema.outbox)
-      .where(
-        and(
-          eq(schema.outbox.status, 'pending'),
-          lt(schema.outbox.nextAttemptAt, new Date()),
-        ),
-      )
-      .orderBy(schema.outbox.nextAttemptAt)
-      .limit(BATCH_SIZE)
-      .for('update', { skipLocked: true });
+    const pending = await this.claimPending();
 
     if (pending.length === 0) {
       return result;
@@ -124,6 +120,56 @@ export class OutboxWorker {
     return result;
   }
 
+  private async claimPending(): Promise<Array<typeof schema.outbox.$inferSelect>> {
+    const now = new Date();
+    const staleLockCutoff = new Date(now.getTime() - 15 * 60 * 1000);
+
+    return db.transaction(async (tx) => {
+      await tx
+        .update(schema.outbox)
+        .set({
+          status: 'pending',
+          lockedAt: null,
+          lockedBy: null,
+          nextAttemptAt: now,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(schema.outbox.status, 'in_flight'),
+            lt(schema.outbox.lockedAt, staleLockCutoff),
+          ),
+        );
+
+      const rows = await tx
+        .select()
+        .from(schema.outbox)
+        .where(
+          and(
+            eq(schema.outbox.status, 'pending'),
+            lte(schema.outbox.nextAttemptAt, now),
+          ),
+        )
+        .orderBy(schema.outbox.nextAttemptAt)
+        .limit(BATCH_SIZE)
+        .for('update', { skipLocked: true });
+
+      for (const row of rows) {
+        await tx
+          .update(schema.outbox)
+          .set({
+            status: 'in_flight',
+            lockedAt: now,
+            lockedBy: WORKER_ID,
+            updatedAt: now,
+          })
+          .where(eq(schema.outbox.id, row.id));
+      }
+
+      return rows;
+    });
+  }
+
   private async processOne(
     outboxId: string,
     type: string,
@@ -131,17 +177,6 @@ export class OutboxWorker {
     idempotencyKey: string,
     aggregateId: string,
   ): Promise<boolean> {
-    // Mark the row in_flight so other workers skip it.
-    await db
-      .update(schema.outbox)
-      .set({
-        status: 'in_flight',
-        lockedAt: new Date(),
-        lockedBy: WORKER_ID,
-        updatedAt: new Date(),
-      })
-      .where(eq(schema.outbox.id, outboxId));
-
     try {
       if (type !== 'web_order.upsert') {
         // Unknown type — mark failed permanently.
@@ -150,6 +185,8 @@ export class OutboxWorker {
           .set({
             status: 'failed',
             lastError: `Unknown outbox type: ${type}`,
+            lockedAt: null,
+            lockedBy: null,
             updatedAt: new Date(),
           })
           .where(eq(schema.outbox.id, outboxId));
@@ -160,7 +197,7 @@ export class OutboxWorker {
         payload,
         idempotencyKey,
       );
-      const veloxSaleId = extractVeloxSaleId(response);
+      const { veloxWebOrderId, veloxSaleId } = extractVeloxIds(response);
 
       await db.transaction(async (tx) => {
         await tx
@@ -168,6 +205,8 @@ export class OutboxWorker {
           .set({
             status: 'done',
             lastError: null,
+            lockedAt: null,
+            lockedBy: null,
             updatedAt: new Date(),
           })
           .where(eq(schema.outbox.id, outboxId));
@@ -176,6 +215,7 @@ export class OutboxWorker {
           .update(schema.ordersSync)
           .set({
             syncStatus: 'synced',
+            veloxWebOrderId,
             veloxSaleId,
             lastSyncAttemptAt: new Date(),
             lastSyncError: null,
@@ -191,7 +231,12 @@ export class OutboxWorker {
       });
       return true;
     } catch (error) {
-      const status = error instanceof VeloxAPIError ? error.statusCode : 0;
+      const status =
+        error instanceof VeloxAPIError
+          ? error.statusCode
+          : error instanceof StorefrontApiError
+            ? error.status
+            : 0;
       const message = error instanceof Error ? error.message : String(error);
       // Read attempts again from the row, since it may have changed
       // (defensive — only one worker touches this row at a time).
@@ -209,6 +254,8 @@ export class OutboxWorker {
           .set({
             status: 'failed',
             lastError: `HTTP ${status}: ${message}`,
+            lockedAt: null,
+            lockedBy: null,
             updatedAt: new Date(),
           })
           .where(eq(schema.outbox.id, outboxId));
@@ -282,17 +329,31 @@ export class OutboxWorker {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function extractVeloxSaleId(response: unknown): string | null {
-  if (typeof response !== 'object' || response === null) return null;
+function extractVeloxIds(response: unknown): {
+  veloxWebOrderId: string | null;
+  veloxSaleId: string | null;
+} {
+  if (typeof response !== 'object' || response === null) {
+    return { veloxWebOrderId: null, veloxSaleId: null };
+  }
   const obj = response as Record<string, unknown>;
-  if (typeof obj.sale_id === 'string') return obj.sale_id;
-  if (typeof obj.id === 'string') return obj.id;
-  if (typeof obj.web_order_id === 'string') return obj.web_order_id;
+  const veloxWebOrderId =
+    typeof obj.id === 'string'
+      ? obj.id
+      : typeof obj.web_order_id === 'string'
+        ? obj.web_order_id
+        : null;
+  let veloxSaleId =
+    typeof obj.velox_sale_id === 'string'
+      ? obj.velox_sale_id
+      : typeof obj.sale_id === 'string'
+        ? obj.sale_id
+        : null;
   if (typeof obj.order === 'object' && obj.order !== null) {
     const order = obj.order as Record<string, unknown>;
-    if (typeof order.sale_id === 'string') return order.sale_id;
+    if (typeof order.sale_id === 'string') veloxSaleId = order.sale_id;
   }
-  return null;
+  return { veloxWebOrderId, veloxSaleId };
 }
 
 export const outboxWorker = new OutboxWorker();

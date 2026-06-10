@@ -1,5 +1,6 @@
 import 'server-only';
 import { StorefrontClient } from '@yoeldevsoft25/storefront-sdk';
+import type { CreateWebOrderDto } from '@yoeldevsoft25/store-contracts';
 
 // ─── Custom Error ────────────────────────────────────────────────────────────
 
@@ -82,65 +83,7 @@ export interface VeloxSalePayload {
   note?: string;
 }
 
-export interface VeloxWebOrderItem {
-  product_id?: string;
-  variant_id?: string;
-  sku?: string | null;
-  name: string;
-  quantity: number;
-  unit_price_usd: number;
-  unit_price_bs: number;
-  size?: string | null;
-  color?: string | null;
-}
-
-export interface VeloxWebOrderPayload {
-  kind?: 'product' | 'menu_item';
-  source?: string;
-  external_order_id: string;
-  external_order_number: string;
-  status?:
-    | 'PENDING_PAYMENT'
-    | 'PAYMENT_REPORTED'
-    | 'PAYMENT_VERIFIED'
-    | 'PREPARING'
-    | 'READY_FOR_PICKUP'
-    | 'SHIPPED'
-    | 'DELIVERED'
-    | 'CANCELLED'
-    | 'REJECTED';
-  customer: {
-    name: string;
-    email?: string | null;
-    phone?: string | null;
-    document_id?: string | null;
-  };
-  items: VeloxWebOrderItem[];
-  subtotal_usd: number;
-  total_usd: number;
-  total_bs: number;
-  exchange_rate: number;
-  delivery_method: 'PICKUP' | 'DELIVERY';
-  delivery?: {
-    state?: string | null;
-    city?: string | null;
-    address_line?: string | null;
-    lat?: number | null;
-    lng?: number | null;
-    map_provider?: string | null;
-    notes?: string | null;
-  } | null;
-  payment?: {
-    method?: string | null;
-    reference?: string | null;
-    bank?: string | null;
-    currency?: 'USD' | 'BS' | 'BSS' | null;
-    amount_usd?: number | null;
-    amount_bs?: number | null;
-    reported_at?: string | null;
-  } | null;
-  notes?: string | null;
-}
+export type VeloxWebOrderPayload = CreateWebOrderDto;
 
 export interface VeloxProductsParams {
   limit?: number;
@@ -186,7 +129,7 @@ class VeloxPosService {
     const baseUrl = process.env.VELOX_POS_API_URL;
     const storeId = process.env.VELOX_STORE_ID;
     const pin = process.env.VELOX_LOGIN_PIN;
-    const storefrontSecret = process.env.VELOX_WEBHOOK_SECRET || process.env.STOREFRONT_API_SECRET;
+    const storefrontSecret = process.env.STOREFRONT_API_SECRET || process.env.VELOX_WEBHOOK_SECRET;
 
     this.baseUrl = baseUrl ? baseUrl.replace(/\/+$/, '') : null;
     this.storeId = storeId ?? null;
@@ -210,7 +153,7 @@ class VeloxPosService {
   private getSdkClient(): StorefrontClient {
     if (!this.sdkClient) {
       const config = this.getConfig();
-      const secret = this.storefrontSecret || process.env.STOREFRONT_API_SECRET || '';
+      const secret = this.storefrontSecret || '';
       if (!secret) {
         throw new Error('STOREFRONT_API_SECRET or VELOX_WEBHOOK_SECRET must be configured');
       }
@@ -378,6 +321,34 @@ class VeloxPosService {
     return result.items as unknown as VeloxProduct[];
   }
 
+  async getCurrentExchangeRate(): Promise<number> {
+    const config = this.getConfig();
+    const response = await fetch(`${config.baseUrl}/public/menu/store/${config.storeId}`, {
+      headers: {
+        'x-storefront-store-id': config.storeId,
+        'x-storefront-secret': this.storefrontSecret ?? '',
+        'x-velox-api-version': '2.0.0',
+      },
+    });
+
+    if (!response.ok) {
+      throw new VeloxAPIError(
+        `Unable to fetch Velox exchange rate: ${response.statusText}`,
+        response.status,
+        `/public/menu/store/${config.storeId}`,
+        await response.text().catch(() => null),
+      );
+    }
+
+    const body = (await response.json()) as { exchange_rate?: unknown };
+    const rate = Number(body.exchange_rate);
+    if (!Number.isFinite(rate) || rate <= 0) {
+      throw new Error('Velox returned an invalid exchange rate');
+    }
+
+    return rate;
+  }
+
   async getStock(
     productId: string,
     variantId?: string,
@@ -405,8 +376,7 @@ class VeloxPosService {
     idempotencyKey: string,
   ): Promise<unknown> {
     const client = this.getSdkClient();
-    const { kind, ...rest } = data;
-    return client.createWebOrder(rest as any, { idempotencyKey });
+    return client.createWebOrder(data, { idempotencyKey });
   }
 
   async verifyWebOrderPayment(

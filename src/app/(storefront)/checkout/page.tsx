@@ -71,7 +71,10 @@ export default function CheckoutPage() {
       const order = await createOrderMutation.mutateAsync({
         items: items.map((item) => ({
           productId: item.productId,
-          variantId: item.legacy ? undefined : item.variantId,
+          variantId:
+            item.legacy || item.variantId.startsWith('product::')
+              ? undefined
+              : item.variantId,
           quantity: item.quantity,
           unitPriceUsd: item.priceUsd,
           unitPriceBs: item.priceBs,

@@ -76,46 +76,22 @@ class ProductSyncService {
    * Sync a single product by fetching its stock and updating the cache.
    */
   async syncProduct(veloxProductId: string): Promise<void> {
-    const products = await veloxPosService.getProducts();
+    const products = await veloxPosService.getProducts({ limit: 10000 });
     const product = products.find((p) => p.id === veloxProductId);
 
     if (!product) {
       throw new Error(`Product ${veloxProductId} not found in Velox POS`);
     }
 
-    const stock = await veloxPosService.getStock(veloxProductId);
-
-    const existing = await db
-      .select()
-      .from(schema.productCache)
-      .where(eq(schema.productCache.veloxId, veloxProductId))
-      .limit(1);
-
-    const productData = {
-      veloxId: product.id,
-      name: product.name,
-      sku: product.sku ?? product.id,
-      barcode: product.barcode,
-      priceUsd: String(product.price_usd),
-      priceBs: String(product.price_bs),
-      isActive: product.is_active,
-      imageUrl: this.normalizeVeloxImageUrl(product.image_url),
-      category: product.category,
-      currentStock: stock.current_stock,
-      syncedAt: new Date(),
+    const result: SyncResult = {
+      total: 1,
+      created: 0,
+      updated: 0,
+      deactivated: 0,
+      errors: [],
+      variantsSynced: 0,
     };
-
-    if (existing.length > 0) {
-      await db
-        .update(schema.productCache)
-        .set(productData)
-        .where(eq(schema.productCache.veloxId, veloxProductId));
-    } else {
-      await db.insert(schema.productCache).values({
-        ...productData,
-        slug: this.generateSlug(product.name, product.sku ?? product.id),
-      });
-    }
+    await this.upsertProduct(product, result);
   }
 
   // ── Private Helpers ─────────────────────────────────────────────────────
