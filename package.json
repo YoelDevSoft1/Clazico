@@ -15,7 +15,11 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx drizzle/seed.ts",
-    "products:import:netlify": "node scripts/import-products-to-netlify.mjs"
+    "products:import:netlify": "node scripts/import-products-to-netlify.mjs",
+    "store:delete-products": "node scripts/delete-all-products.mjs",
+    "store:velox-delete-products": "node scripts/velox-delete-all-products.mjs",
+    "store:diagnostics": "node scripts/store-diagnostics.mjs",
+    "store:repair": "node scripts/store-repair.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",

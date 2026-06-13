@@ -86,16 +86,16 @@ export default async function HomePage() {
               </div>
 
               <div>
-                <h1 className="font-outfit text-[3.8rem] font-black leading-[0.85] tracking-tighter text-white sm:text-[5.5rem] lg:text-[6.5rem] xl:text-[7.2rem] italic uppercase">
-                  CLAZICO<span className="text-brand-primary">.</span>
+                <h1 className="font-outfit text-[3.8rem] font-black leading-[0.85] tracking-wider text-white sm:text-[5.5rem] lg:text-[6.5rem] xl:text-[7.2rem] italic uppercase">
+                  CLA<span className="text-brand-primary animate-pulse">Z</span>ICO
                 </h1>
-                <p className="athletic-tag text-zinc-500 mt-2 text-xs">Supreme Style. Real Stock.</p>
+                <p className="athletic-tag text-zinc-500 mt-2 text-xs">EXCLUSIVE STORE. REAL STOCK.</p>
                 <p className="mt-5 max-w-[28rem] text-sm font-bold uppercase tracking-wider leading-relaxed text-zinc-400">
                   Calzado y colecciones deportivas de la más alta gama con disponibilidad verificada e importación directa.
                 </p>
               </div>
 
-              <div className="flex flex-col gap-6 sm:flex-row">
+              <div className="flex flex-col items-start gap-6 sm:flex-row">
                 {/* Button 1: Explorar catálogo */}
                 <div className="relative group/btn-wrapper">
                   {/* 3D offset border */}

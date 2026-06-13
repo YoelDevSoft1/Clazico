@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -51,16 +52,27 @@ export function Navbar() {
     <>
       <header
         className={cn(
-          'fixed inset-x-0 top-0 z-[100] border-b transition-all duration-300 safe-area-top',
+          'fixed inset-x-0 top-0 z-[100] transition-all duration-300 safe-area-top',
           isScrolled
-            ? 'border-white/10 bg-zinc-950/95 backdrop-blur-xl shadow-glass'
-            : 'border-transparent bg-gradient-to-b from-zinc-950/80 to-transparent',
+            ? 'border-b border-white/10 bg-zinc-950/95 backdrop-blur-xl shadow-glass'
+            : 'bg-gradient-to-b from-zinc-950/80 to-transparent',
         )}
       >
-        <div className="store-shell flex h-14 items-center justify-between sm:h-16">
-          <Link href="/" className="flex min-w-0 items-center">
+        <div className="store-shell relative flex h-14 items-center justify-between sm:h-16">
+          
+          {/* Left section spacer on mobile, logo on desktop */}
+          <div className="flex flex-1 md:flex-none justify-start">
+            <Link href="/" className="hidden md:flex min-w-0 items-center">
+              <span className="font-outfit text-xl font-black tracking-tighter text-white sm:text-2xl italic uppercase">
+                CLAZ<span className="relative">I<span className="absolute -top-[1px] -right-[4px] inline-block h-[5px] w-[5px] rounded-full bg-brand-primary animate-pulse" /></span>CO
+              </span>
+            </Link>
+          </div>
+
+          {/* Centered Logo on mobile */}
+          <Link href="/" className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 md:hidden">
             <span className="font-outfit text-xl font-black tracking-tighter text-white sm:text-2xl italic uppercase">
-              CLAZICO<span className="inline-block h-2 w-2 rounded-full bg-brand-primary animate-pulse ml-0.5" />
+              CLAZ<span className="relative">I<span className="absolute -top-[1px] -right-[4px] inline-block h-[5px] w-[5px] rounded-full bg-brand-primary animate-pulse" /></span>CO
             </span>
           </Link>
 
