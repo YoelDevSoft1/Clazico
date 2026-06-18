@@ -6,9 +6,10 @@ interface Brand {
   readonly src: string
 }
 
-// Wordmarks sourced from simpleicons.org (CC0) for nike, adidas, newbalance.
-// 59fifty and newera are custom typographic marks because those brands are
-// not present in the simpleicons registry.
+// Wordmarks live in `public/brands/`. CSS `filter: brightness(0) invert(1)`
+// forces every pixel to pure white so they render correctly on the dark hero
+// background, regardless of whether the source SVG is monochrome or
+// multi-colored.
 const BRANDS: readonly Brand[] = [
   { slug: 'nike', label: 'Nike', src: '/brands/nike.svg' },
   { slug: 'adidas', label: 'Adidas', src: '/brands/adidas.svg' },

@@ -959,10 +959,14 @@ body {
   height: 36px;
   width: auto;
   opacity: 0.55;
-  /* Force the SVG to render white over the dark hero background.
-     The simpleicons paths use either fill="currentColor" or solid black,
-     so invert+brightness brings them to pure white. */
-  filter: grayscale(1) invert(1) brightness(2);
+  /* Force every pixel to pure white regardless of source color.
+     `brightness(0)` collapses all colors to black, then `invert(1)`
+     flips to white. This works for monochrome SVGs (Nike, Adidas,
+     59FIFTY) AND multi-color ones (New Era's flag has both black
+     silhouettes and white text). White-on-black detail becomes
+     white-on-white (invisible) but the recognizable silhouette
+     stays visible. */
+  filter: brightness(0) invert(1);
   transition: opacity 250ms var(--ease-smooth);
   pointer-events: none;
   user-select: none;
