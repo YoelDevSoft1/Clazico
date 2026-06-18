@@ -893,3 +893,98 @@ body {
     padding: 0 2rem;
   }
 }
+
+/* ============================================
+   Brand Marquee (Home)
+   Infinite horizontal scroll of brand wordmarks.
+   Replaces the legacy stats grid. Pure CSS — no JS,
+   pauses on hover, respects prefers-reduced-motion.
+   ============================================ */
+@keyframes marquee-scroll {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-50%, 0, 0); }
+}
+
+.brand-marquee {
+  position: relative;
+  width: 100%;
+  max-width: 64rem;
+  margin-inline: auto;
+  overflow: hidden;
+  /* Fade gradient on both horizontal edges so logos don't hard-cut */
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    black 8%,
+    black 92%,
+    transparent 100%
+  );
+          mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    black 8%,
+    black 92%,
+    transparent 100%
+  );
+}
+
+.brand-marquee-track {
+  display: flex;
+  width: max-content;
+  align-items: center;
+  gap: 3rem;
+  padding: 0.5rem 0;
+  margin: 0;
+  list-style: none;
+  animation: marquee-scroll 20s linear infinite;
+  will-change: transform;
+}
+
+.brand-marquee:hover .brand-marquee-track {
+  animation-play-state: paused;
+}
+
+.brand-marquee-item {
+  flex: 0 0 auto;
+}
+
+.brand-marquee-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brand-marquee-logo {
+  display: block;
+  height: 36px;
+  width: auto;
+  opacity: 0.55;
+  /* Force the SVG to render white over the dark hero background.
+     The simpleicons paths use either fill="currentColor" or solid black,
+     so invert+brightness brings them to pure white. */
+  filter: grayscale(1) invert(1) brightness(2);
+  transition: opacity 250ms var(--ease-smooth);
+  pointer-events: none;
+  user-select: none;
+}
+
+.brand-marquee-link:hover .brand-marquee-logo {
+  opacity: 1;
+}
+
+@media (max-width: 640px) {
+  .brand-marquee-logo {
+    height: 28px;
+  }
+
+  .brand-marquee-track {
+    gap: 2.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-marquee-track {
+    animation: none;
+    transform: none;
+  }
+}

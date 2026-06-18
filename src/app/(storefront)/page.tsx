@@ -1,53 +1,33 @@
-import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight, Check, ShieldCheck, Truck } from 'lucide-react';
-import { desc, eq, sql } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { db } from '@/server/db';
 import * as schema from '@/../drizzle/schema';
-import { formatBsS, formatUSD } from '@/lib/utils';
 import { FeaturedCarousel } from '@/components/home/featured-carousel';
 import { ActiveCollectionCarousel } from '@/components/home/active-collection-carousel';
+import { BrandMarquee } from '@/components/home/brand-marquee';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 type FeaturedProduct = typeof schema.productCache.$inferSelect;
 
-async function getHomeProducts(): Promise<{
-  featuredProducts: FeaturedProduct[];
-  productCount: number;
-  inStockCount: number;
-}> {
+async function getHomeProducts(): Promise<FeaturedProduct[]> {
   try {
-    const [featuredProducts, totals] = await Promise.all([
-      db
-        .select()
-        .from(schema.productCache)
-        .where(eq(schema.productCache.isActive, true))
-        .orderBy(desc(schema.productCache.currentStock), desc(schema.productCache.createdAt))
-        .limit(32),
-      db
-        .select({
-          products: sql<number>`COUNT(*)`,
-          inStock: sql<number>`COUNT(*) FILTER (WHERE ${schema.productCache.currentStock} > 0)`,
-        })
-        .from(schema.productCache)
-        .where(eq(schema.productCache.isActive, true)),
-    ]);
-
-    return {
-      featuredProducts,
-      productCount: Number(totals[0]?.products ?? 0),
-      inStockCount: Number(totals[0]?.inStock ?? 0),
-    };
+    return await db
+      .select()
+      .from(schema.productCache)
+      .where(eq(schema.productCache.isActive, true))
+      .orderBy(desc(schema.productCache.currentStock), desc(schema.productCache.createdAt))
+      .limit(32);
   } catch {
-    return { featuredProducts: [], productCount: 0, inStockCount: 0 };
+    return [];
   }
 }
 
 
 export default async function HomePage() {
-  const { featuredProducts, productCount, inStockCount } = await getHomeProducts();
+  const featuredProducts = await getHomeProducts();
 
   return (
     <div className="min-h-dvh bg-zinc-950 pb-mobile-nav text-white">
@@ -150,24 +130,8 @@ export default async function HomePage() {
                 </div>
               </div>
 
-              {/* Statistics Grid */}
-              <div className="grid max-w-xl grid-cols-3 border border-white/5 bg-zinc-900/30 backdrop-blur-xs">
-                {[
-                  { value: String(productCount), label: 'Productos' },
-                  { value: String(inStockCount), label: 'Disponibles' },
-                  { value: 'Bs / USD', label: 'Tasa Oficial' },
-                ].map((stat, index) => (
-                  <div
-                    key={stat.label}
-                    className={`p-4 text-center sm:text-left ${
-                      index < 2 ? 'border-r border-white/5' : ''
-                    }`}
-                  >
-                    <p className="font-mono text-xl font-black text-white">{stat.value}</p>
-                    <p className="athletic-tag mt-1 text-[9px] text-zinc-500">{stat.label}</p>
-                  </div>
-                ))}
-              </div>
+              {/* Brand Marquee (replaces the legacy stats grid) */}
+              <BrandMarquee />
 
               {/* Trust Badges */}
               <div className="flex max-w-3xl flex-wrap gap-x-6 gap-y-3 text-[10px] font-black uppercase tracking-wider text-zinc-500">
