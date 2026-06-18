@@ -54,7 +54,7 @@ export const metadata: Metadata = {
   creator: "Clazico Store",
   publisher: "Clazico Store",
   metadataBase: new URL(
-    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:40932"
+    process.env.NEXT_PUBLIC_APP_URL || "https://clazicostore.com"
   ),
   manifest: "/manifest.json",
   appleWebApp: {
@@ -75,9 +75,9 @@ export const metadata: Metadata = {
       "Tienda exclusiva de zapatos y ropa. Estilo premium, envíos a toda Venezuela.",
     images: [
       {
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
+        url: "/logos/logo.png?v=20260618",
+        width: 2848,
+        height: 1504,
         alt: "Clazico Store",
       },
     ],
@@ -86,7 +86,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Clazico Store — Exclusive Shop",
     description: "Tienda exclusiva de zapatos y ropa.",
-    images: ["/og-image.png"],
+    images: ["/logos/logo.png?v=20260618"],
   },
   icons: {
     icon: [
