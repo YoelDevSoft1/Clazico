@@ -91,12 +91,24 @@ export class OutboxWorker {
     const result: OutboxProcessResult = { processed: 0, failed: 0, skipped: 0 };
 
     const pending = await this.claimPending();
+    return this.processRows(pending, result);
+  }
 
-    if (pending.length === 0) {
+  async processAggregate(aggregateId: string): Promise<OutboxProcessResult> {
+    const result: OutboxProcessResult = { processed: 0, failed: 0, skipped: 0 };
+    const pending = await this.claimPendingForAggregate(aggregateId);
+    return this.processRows(pending, result);
+  }
+
+  private async processRows(
+    rows: Array<typeof schema.outbox.$inferSelect>,
+    result: OutboxProcessResult,
+  ): Promise<OutboxProcessResult> {
+    if (rows.length === 0) {
       return result;
     }
 
-    for (const row of pending) {
+    for (const row of rows) {
       try {
         const success = await this.processOne(row.id, row.type, row.payload as VeloxWebOrderPayload, row.idempotencyKey, row.aggregateId);
         if (success) {
@@ -151,6 +163,60 @@ export class OutboxWorker {
           ),
         )
         .orderBy(schema.outbox.nextAttemptAt)
+        .limit(BATCH_SIZE)
+        .for('update', { skipLocked: true });
+
+      for (const row of rows) {
+        await tx
+          .update(schema.outbox)
+          .set({
+            status: 'in_flight',
+            lockedAt: now,
+            lockedBy: WORKER_ID,
+            updatedAt: now,
+          })
+          .where(eq(schema.outbox.id, row.id));
+      }
+
+      return rows;
+    });
+  }
+
+  private async claimPendingForAggregate(
+    aggregateId: string,
+  ): Promise<Array<typeof schema.outbox.$inferSelect>> {
+    const now = new Date();
+    const staleLockCutoff = new Date(now.getTime() - 15 * 60 * 1000);
+
+    return db.transaction(async (tx) => {
+      await tx
+        .update(schema.outbox)
+        .set({
+          status: 'pending',
+          lockedAt: null,
+          lockedBy: null,
+          nextAttemptAt: now,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(schema.outbox.aggregateId, aggregateId),
+            eq(schema.outbox.status, 'in_flight'),
+            lt(schema.outbox.lockedAt, staleLockCutoff),
+          ),
+        );
+
+      const rows = await tx
+        .select()
+        .from(schema.outbox)
+        .where(
+          and(
+            eq(schema.outbox.aggregateId, aggregateId),
+            eq(schema.outbox.status, 'pending'),
+            lte(schema.outbox.nextAttemptAt, now),
+          ),
+        )
+        .orderBy(schema.outbox.createdAt)
         .limit(BATCH_SIZE)
         .for('update', { skipLocked: true });
 
@@ -357,6 +423,26 @@ function extractVeloxIds(response: unknown): {
 }
 
 export const outboxWorker = new OutboxWorker();
+
+export async function flushOutboxBestEffort(
+  context: string,
+  aggregateId?: string,
+): Promise<void> {
+  try {
+    const result = aggregateId
+      ? await outboxWorker.processAggregate(aggregateId)
+      : await outboxWorker.processPending();
+    if (result.failed > 0) {
+      console.error(`[outbox:${context}] processed with failures`, result);
+    }
+  } catch (error) {
+    console.error(
+      `[outbox:${context}] flush failed`,
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
 export default OutboxWorker;
 
 // Avoid unused import warnings

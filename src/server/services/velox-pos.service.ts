@@ -55,6 +55,7 @@ export interface VeloxProduct {
   is_active: boolean;
   image_url: string | null;
   category: string | null;
+  is_visible_public?: boolean;
   variants?: VeloxProductVariant[];
 }
 

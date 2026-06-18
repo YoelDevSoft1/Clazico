@@ -7,7 +7,7 @@ import { ArrowLeft, ArrowRight, CheckCircle, Loader2, Send } from 'lucide-react'
 import { useTRPC } from '@/lib/trpc-client';
 import { useSession } from '@/lib/auth-client';
 import { useCartStore } from '@/stores/cart.store';
-import { PAYMENT_DETAILS, VENEZUELAN_BANKS } from '@/lib/constants';
+import { PAYMENT_DETAILS, STORE_INFO, VENEZUELAN_BANKS } from '@/lib/constants';
 import { formatBsS, formatUSD } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { DeliveryLocationPicker } from '@/components/checkout/delivery-location-picker';
@@ -15,6 +15,8 @@ import { DeliveryLocationPicker } from '@/components/checkout/delivery-location-
 type CreatedOrder = {
   id: string;
   orderNumber: string;
+  totalUsd: number;
+  totalBss: number;
 };
 
 type PaymentMethod = 'pago_movil' | 'transferencia' | 'zelle' | 'efectivo_usd';
@@ -100,7 +102,12 @@ export default function CheckoutPage() {
         customerPhone: phone,
       });
 
-      setCreatedOrder(order);
+      setCreatedOrder({
+        id: order.id,
+        orderNumber: order.orderNumber,
+        totalUsd: Number(order.totalUsd ?? subtotalUsd),
+        totalBss: Number(order.totalBss ?? subtotalBs),
+      });
 
       if (paymentMethod !== 'efectivo_usd') {
         const selectedBank = VENEZUELAN_BANKS.find((bank) => bank.code === originBank);
@@ -128,10 +135,12 @@ export default function CheckoutPage() {
   };
 
   if (step === 'success' && createdOrder) {
-    const totalString = isUsdPayment ? formatUSD(subtotalUsd) : formatBsS(subtotalBs);
-    const storePhone = '+584120000000';
+    const totalString = isUsdPayment
+      ? formatUSD(createdOrder.totalUsd)
+      : formatBsS(createdOrder.totalBss);
+    const storePhone = toWhatsappPhone(STORE_INFO.phone);
     const waText = `Hola Clazico Store. Pedido ${createdOrder.orderNumber} por ${totalString}. Método: ${paymentLabels[paymentMethod]}. Nombre: ${name}.`;
-    const waUrl = `https://wa.me/${storePhone.replace('+', '')}?text=${encodeURIComponent(waText)}`;
+    const waUrl = `https://wa.me/${storePhone}?text=${encodeURIComponent(waText)}`;
 
     return (
       <div className="store-shell grid min-h-[calc(100dvh-3.5rem)] place-items-center bg-zinc-950 py-10 text-white">
@@ -347,6 +356,13 @@ export default function CheckoutPage() {
       </div>
     </div>
   );
+}
+
+function toWhatsappPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.startsWith('0')) return `58${digits.slice(1)}`;
+  if (digits.startsWith('58')) return digits;
+  return digits;
 }
 
 function CheckoutSection({ title, children }: { title: string; children: React.ReactNode }) {

@@ -12,6 +12,7 @@ const importedProductSchema = z.object({
   price_usd: z.coerce.number().default(0),
   price_bs: z.coerce.number().default(0),
   is_active: z.coerce.boolean().default(true),
+  is_visible_public: z.coerce.boolean().optional(),
   image_url: z.string().nullish(),
   category: z.string().nullish(),
   current_stock: z.coerce.number().int().default(0),
@@ -101,10 +102,13 @@ function toProductCacheData(product: ImportedProduct, sku: string) {
     barcode: product.barcode ?? null,
     priceUsd: String(product.price_usd),
     priceBs: String(product.price_bs),
-    isActive: product.is_active,
+    isActive: product.is_active && product.is_visible_public !== false,
     imageUrl: normalizeVeloxImageUrl(product.image_url),
     category: product.category ?? null,
     currentStock: product.current_stock,
+    metadata: {
+      isVisiblePublic: product.is_visible_public !== false,
+    },
     syncedAt: new Date(),
   };
 }

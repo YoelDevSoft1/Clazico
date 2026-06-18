@@ -116,12 +116,13 @@ export const paymentRouter = createTRPCRouter({
         notes: 'Comprobante de pago subido por el cliente',
       });
 
-      const { enqueueWebOrderUpsert } = await import('@/server/services/outbox-worker');
+      const { enqueueWebOrderUpsert, flushOutboxBestEffort } = await import('@/server/services/outbox-worker');
       await enqueueWebOrderUpsert({
         orderId: input.orderId,
         idempotencyKey: `${input.orderId}:PAYMENT_REPORTED`,
         status: 'PAYMENT_REPORTED',
       });
+      await flushOutboxBestEffort('payment.submit', input.orderId);
 
       return payment;
     }),

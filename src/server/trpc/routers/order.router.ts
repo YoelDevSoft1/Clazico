@@ -110,7 +110,7 @@ export const orderRouter = createTRPCRouter({
       const paymentAmount = input.currency === 'USD' ? totalUsd : totalBss;
       const paymentCurrency = input.currency === 'USD' ? 'USD' : 'BSS';
 
-      return ctx.db.transaction(async (tx) => {
+      const order = await ctx.db.transaction(async (tx) => {
         const [order] = await tx
           .insert(schema.orders)
           .values({
@@ -231,6 +231,11 @@ export const orderRouter = createTRPCRouter({
 
         return order;
       });
+
+      const { flushOutboxBestEffort } = await import('@/server/services/outbox-worker');
+      await flushOutboxBestEffort('order.create', order.id);
+
+      return order;
     }),
 
   /**
