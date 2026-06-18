@@ -13,9 +13,14 @@ interface Brand {
 const BRANDS: readonly Brand[] = [
   { slug: 'nike', label: 'Nike', src: '/brands/nike.svg' },
   { slug: 'adidas', label: 'Adidas', src: '/brands/adidas.svg' },
-  { slug: 'new-era', label: 'New Era', src: '/brands/newera.svg' },
-  { slug: 'new-balance', label: 'New Balance', src: '/brands/newbalance.svg' },
+  { slug: 'new-era', label: 'New Era', src: '/brands/new-era.svg' },
+  { slug: 'new-balance', label: 'New Balance', src: '/brands/new-balance.svg' },
   { slug: '59fifty', label: '59 Fifty', src: '/brands/59fifty.svg' },
+  { slug: 'oncloud', label: 'On Cloud', src: '/brands/On-cloud-logo-white-background.svg' },
+  { slug: 'jordan', label: 'Jordan', src: '/brands/jordan-svgrepo-com.svg' },
+  { slug: 'puma', label: 'Puma', src: '/brands/Puma-logo-(text).svg' },
+  { slug: 'yout', label: 'YOUT', src: '/brands/YOUT.svg' },
+  { slug: 'blow-up', label: 'Blow UP', src: '/brands/Blow UP.svg' },
 ] as const
 
 /**

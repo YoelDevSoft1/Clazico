@@ -932,7 +932,6 @@ body {
   display: flex;
   width: max-content;
   align-items: center;
-  gap: 3rem;
   padding: 0.5rem 0;
   margin: 0;
   list-style: none;
@@ -946,17 +945,19 @@ body {
 
 .brand-marquee-item {
   flex: 0 0 auto;
+  padding-right: 3rem;
 }
 
 .brand-marquee-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
 }
 
 .brand-marquee-logo {
   display: block;
-  height: 36px;
+  height: 56px;
   width: auto;
   opacity: 0.55;
   /* Force every pixel to pure white regardless of source color.
@@ -967,28 +968,52 @@ body {
      white-on-white (invisible) but the recognizable silhouette
      stays visible. */
   filter: brightness(0) invert(1);
-  transition: opacity 250ms var(--ease-smooth);
+  transition: opacity 300ms ease, transform 400ms cubic-bezier(0.16, 1, 0.3, 1);
   pointer-events: none;
   user-select: none;
+  transform-origin: center;
+  will-change: transform, opacity;
 }
 
 .brand-marquee-link:hover .brand-marquee-logo {
   opacity: 1;
+  transform: scale(1.15);
+}
+
+/* Make the Adidas logo larger since it's square and looks smaller than wide logos */
+img[src*="adidas"].brand-marquee-logo {
+  height: 88px;
+}
+
+img[src*="new-era"].brand-marquee-logo {
+  height: 72px;
+}
+
+/* Blow UP also needs to be larger to match the others */
+img[src*="Blow"].brand-marquee-logo {
+  height: 104px;
 }
 
 @media (max-width: 640px) {
   .brand-marquee-logo {
-    height: 28px;
+    height: 40px;
+  }
+  
+  img[src*="adidas"].brand-marquee-logo {
+    height: 64px;
   }
 
-  .brand-marquee-track {
-    gap: 2.25rem;
+  img[src*="new-era"].brand-marquee-logo {
+    height: 52px;
+  }
+
+  img[src*="Blow"].brand-marquee-logo {
+    height: 76px;
+  }
+
+  .brand-marquee-item {
+    padding-right: 2.25rem;
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .brand-marquee-track {
-    animation: none;
-    transform: none;
-  }
-}
+

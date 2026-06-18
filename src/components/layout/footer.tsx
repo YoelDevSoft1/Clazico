@@ -13,13 +13,13 @@ export function Footer() {
             <span className="font-outfit text-xl font-black tracking-tighter text-white italic uppercase">
               ClaZico<span className="inline-block h-2 w-2 rounded-full bg-brand-primary animate-pulse ml-0.5" />
             </span>
-            <p className="text-xs text-zinc-400 leading-6 font-bold">
-              👟 • Cuenta con Flow: <a href="https://instagram.com/clazicosport" target="_blank" rel="noopener noreferrer" className="text-brand-primary hover:underline">@clazicosport</a><br/>
-              🏍️ • Delivery & Envíos a Toda Vzla 🇻🇪
-            </p>
-            <div className="flex gap-4 text-[10px] uppercase tracking-widest text-zinc-600 font-black">
-              <span>13.5K Seguidores</span>
-              <span>71 Publicaciones</span>
+            <div className="flex flex-col gap-2 text-xs uppercase tracking-wider font-bold">
+              <Link href="/politicas-de-privacidad" className="text-zinc-400 hover:text-white transition-colors">
+                Políticas de Privacidad
+              </Link>
+              <Link href="/terminos-de-uso" className="text-zinc-400 hover:text-white transition-colors">
+                Términos de Uso
+              </Link>
             </div>
           </div>
 
@@ -52,13 +52,10 @@ export function Footer() {
 
           {/* Payment & Logistics (VE Context) */}
           <div>
-            <h3 className="text-[11px] font-black text-white tracking-[0.2em] uppercase mb-4">Servicios VE</h3>
+            <h3 className="text-[11px] font-black text-white tracking-[0.2em] uppercase mb-4">Servicios Clazico</h3>
             <ul className="space-y-3 text-xs text-zinc-500 uppercase tracking-wider font-bold font-sans">
-              <li>Pago Móvil (Banesco)</li>
-              <li>Transferencia Bancaria</li>
-              <li>Zelle / Efectivo USD</li>
               <li>Envíos: MRW, ZOOM, TEALCA</li>
-              <li>Entregas personales y Pick Up</li>
+              <li>Entregas personales y Delivery</li>
             </ul>
           </div>
 
@@ -67,13 +64,17 @@ export function Footer() {
             <h3 className="text-[11px] font-black text-white tracking-[0.2em] uppercase mb-4">Contacto</h3>
             <ul className="space-y-3 text-xs uppercase tracking-wider font-bold">
               <li className="text-zinc-500">WhatsApp: <span className="text-zinc-300 font-mono font-black">{STORE_INFO.phone}</span></li>
-              <li className="text-zinc-500">Instagram: <a href={`https://instagram.com/${STORE_INFO.instagram.replace('@','')}`} target="_blank" rel="noopener noreferrer" className="text-brand-primary hover:underline">{STORE_INFO.instagram}</a></li>
+              <li className="text-zinc-500">WhatsApp Secundario: <span className="text-zinc-300 font-mono font-black">{STORE_INFO.phone1}</span></li>
+              <li className="text-zinc-500">Instagram: <a href={`https://instagram.com/${STORE_INFO.instagram.replace('@','')}`} target="_blank" rel="noopener noreferrer" className="text-brand-primary hover:underline">{STORE_INFO.instagram}</a>
+              </li>
+              <li className="text-zinc-500">Instagram: <a href={`https://instagram.com/${STORE_INFO.instagramSport.replace('@','')}`} target="_blank" rel="noopener noreferrer" className="text-brand-primary hover:underline">{STORE_INFO.instagramSport}</a>
+              </li>
               <li className="text-zinc-500 flex flex-col gap-1">
                 <span>Ubicación:</span>
                 <span className="text-zinc-300 normal-case tracking-normal">{STORE_INFO.address}</span>
               </li>
               <li className="pt-2">
-                <Link href="/catalog" className="text-brand-primary hover:underline">🌐 | Realiza tu Compra ⬇️</Link>
+                <Link href="/catalog" className="text-brand-primary hover:underline">Realiza tu Compra</Link>
               </li>
             </ul>
           </div>

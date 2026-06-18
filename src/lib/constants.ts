@@ -10,10 +10,11 @@ export const STORE_INFO = {
   tagline: "Realiza tu Compra",
   description: "Zapatos y ropa de marcas reconocidas",
   phone: "0412-5806711",
+  phone1: "0412-0815850",
   email: "info@clazico.com",
   instagram: "@clazico.ve",
   instagramSport: "@clazicosport",
-  address: "📍 Tienda Física: Calle 79 con Av 16 Delicias, Sector Paraíso. Maracaibo, Zulia.",
+  address: "Calle 79 con Av 16 Delicias, Sector Paraíso. Maracaibo, Zulia.",
   workingHours: "Lun - Sáb: 9:00 AM - 7:00 PM",
 } as const;
 
