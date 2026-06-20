@@ -19,12 +19,20 @@ const GetPublicMenuRawResponseSchema = z.object({
 const CreateWebOrderResponseSchema = z.object({
     id: z.string().uuid(),
     status: WebOrderStatusUpdatedPayloadSchema.shape.data.shape.status,
-    velox_sale_id: z.string().uuid().nullable(),
-});
+    sale_id: z.string().uuid().nullable().optional(),
+    velox_sale_id: z.string().uuid().nullable().optional(),
+}).passthrough().transform((response) => ({
+    ...response,
+    velox_sale_id: response.velox_sale_id ?? response.sale_id ?? null,
+}));
 const VerifyPaymentResponseSchema = z.object({
     status: WebOrderStatusUpdatedPayloadSchema.shape.data.shape.status,
-    velox_sale_id: z.string().uuid().nullable(),
-});
+    sale_id: z.string().uuid().nullable().optional(),
+    velox_sale_id: z.string().uuid().nullable().optional(),
+}).passthrough().transform((response) => ({
+    ...response,
+    velox_sale_id: response.velox_sale_id ?? response.sale_id ?? null,
+}));
 export class StorefrontApiError extends Error {
     status;
     code;

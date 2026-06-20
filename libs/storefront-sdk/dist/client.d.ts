@@ -49,12 +49,14 @@ export declare class StorefrontClient {
     }): Promise<{
         id: string;
         status: WebOrderStatus;
+        sale_id?: string | null;
         velox_sale_id: string | null;
     }>;
     verifyPayment(externalOrderId: string, options: {
         idempotencyKey: string;
     }): Promise<{
         status: WebOrderStatus;
+        sale_id?: string | null;
         velox_sale_id: string | null;
     }>;
     buildTrackingUrl(token: string): string;

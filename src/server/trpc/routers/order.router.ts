@@ -17,6 +17,7 @@ import {
 } from '@/schemas/order.schema';
 import { orderNumberService } from '@/server/services/order-number.service';
 import type { VeloxWebOrderPayload } from '@/server/services/velox-pos.service';
+import { calculateShippingCost, SHIPPING_CONFIG } from '@/server/services/shipping.service';
 
 export const orderRouter = createTRPCRouter({
   /**
@@ -32,6 +33,21 @@ export const orderRouter = createTRPCRouter({
    *    immediately so the customer can keep moving.
    * 4. Track sync state in `ordersSync` for the admin UI.
    */
+  getShippingCost: publicProcedure
+    .input(
+      z.object({
+        state: z.string().nullable().optional(),
+        city: z.string().nullable().optional(),
+        lat: z.number().nullable().optional(),
+        lng: z.number().nullable().optional(),
+        itemsTotalUsd: z.number(),
+        totalQuantity: z.number(),
+      })
+    )
+    .query(({ input }) => {
+      return calculateShippingCost(input);
+    }),
+
   create: publicProcedure
     .input(createOrderSchema)
     .mutation(async ({ ctx, input }) => {
@@ -84,18 +100,41 @@ export const orderRouter = createTRPCRouter({
       const customerId = await resolveCustomerId(ctx, input);
       const orderNumber = await orderNumberService.generate();
 
-      // Calculate totals
-      let subtotalUsd = 0;
+      // Calculate item totals
+      let itemsTotalUsd = 0;
+      let totalQuantity = 0;
       for (const item of resolvedItems) {
-        subtotalUsd += item.unitPriceUsd * item.quantity;
+        itemsTotalUsd += item.unitPriceUsd * item.quantity;
+        totalQuantity += item.quantity;
       }
 
-      // In this version, discount is 0 by default, total = subtotal
-      const totalUsd = subtotalUsd;
+      const shipping = calculateShippingCost({
+        state: input.deliveryState,
+        city: input.deliveryCity,
+        lat: input.deliveryLat,
+        lng: input.deliveryLng,
+        itemsTotalUsd,
+        totalQuantity,
+      });
+
+      const subtotalUsd = itemsTotalUsd;
+      const totalUsd = Number((subtotalUsd + shipping.totalFee).toFixed(2));
       const totalBss = Number((totalUsd * exchangeRate).toFixed(2));
 
-      // Generate a single idempotency key for the order. This is
-      // propagated to Velox and also used as the outbox row key.
+      // Inject delivery item if there is a fee
+      if (shipping.totalFee > 0) {
+        resolvedItems.push({
+          productId: SHIPPING_CONFIG.VELOX_DELIVERY_PRODUCT_ID,
+          veloxVariantId: null,
+          productSku: 'DELIVERY-FEE',
+          variantSku: null,
+          productName: `Costo de Envío${shipping.isLocal ? ' Local' : ' Nacional'}${shipping.volumeSurcharge > 0 ? ' (+Volumen)' : ''}`,
+          quantity: 1,
+          unitPriceUsd: shipping.totalFee,
+          unitPriceBs: Number((shipping.totalFee * exchangeRate).toFixed(2)),
+        });
+      }
+
       const idempotencyKey = randomUUID();
 
       const methodMap: Record<string, 'PAGO_MOVIL' | 'TRANSFER' | 'ZELLE' | 'CASH_USD' | 'CASH_BSS' | 'BINANCE'> = {
@@ -190,8 +229,8 @@ export const orderRouter = createTRPCRouter({
           exchange_rate: exchangeRate,
           delivery_method: input.deliveryMethod,
           delivery: {
-            state: null,
-            city: null,
+            state: input.deliveryState ?? null,
+            city: input.deliveryCity ?? null,
             address_line: input.deliveryAddressText ?? null,
             lat: input.deliveryLat ?? null,
             lng: input.deliveryLng ?? null,
@@ -201,15 +240,17 @@ export const orderRouter = createTRPCRouter({
                 : null,
             notes: input.note ?? null,
           },
-          payment: {
-            method: dbMethod === 'CASH_BSS' ? 'CASH_BS' : dbMethod,
-            reference: null,
-            bank: null,
-            currency: paymentCurrency === 'BSS' ? 'BS' : paymentCurrency,
-            amount_usd: input.currency === 'USD' ? paymentAmount : totalUsd,
-            amount_bs: input.currency === 'BS' ? paymentAmount : totalBss,
-            reported_at: null,
-          },
+          payment: ['PAGO_MOVIL', 'TRANSFER', 'ZELLE'].includes(dbMethod)
+            ? {
+                method: dbMethod as 'PAGO_MOVIL' | 'TRANSFER' | 'ZELLE',
+                reference: null,
+                bank: null,
+                currency: paymentCurrency === 'BSS' ? 'BS' : paymentCurrency,
+                amount_usd: input.currency === 'USD' ? paymentAmount : totalUsd,
+                amount_bs: input.currency === 'BS' ? paymentAmount : totalBss,
+                reported_at: null,
+              }
+            : null,
           notes: input.note ?? null,
         };
 

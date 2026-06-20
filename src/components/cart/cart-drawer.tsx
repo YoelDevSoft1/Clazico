@@ -7,6 +7,8 @@ import { X, Trash2, Plus, Minus, ArrowRight, ShoppingBag, ShieldCheck, Truck } f
 import { useCartStore } from '@/stores/cart.store';
 import { formatUSD, formatBsS } from '@/lib/utils';
 import { cn } from '@/lib/utils';
+import { useTRPC } from '@/lib/trpc-client';
+import { useQuery } from '@tanstack/react-query';
 
 export function CartDrawer() {
   const isOpen = useCartStore((state) => state.isOpen);
@@ -19,9 +21,24 @@ export function CartDrawer() {
 
   const totalItems = items.reduce((acc, item) => acc + item.quantity, 0);
   const shippingThreshold = 100;
-  const isFreeShipping = subtotalUsd >= shippingThreshold;
   const progressPercent = Math.min((subtotalUsd / shippingThreshold) * 100, 100);
   const remainingForFreeShipping = Math.max(shippingThreshold - subtotalUsd, 0);
+
+  const trpc = useTRPC();
+  const { data: shippingData } = useQuery({
+    ...trpc.order.getShippingCost.queryOptions({
+      state: null,
+      city: null,
+      lat: null,
+      lng: null,
+      itemsTotalUsd: subtotalUsd,
+      totalQuantity: totalItems,
+    }),
+    enabled: isOpen && items.length > 0,
+  });
+
+  const isFreeBaseShipping = subtotalUsd >= shippingThreshold;
+  const hasVolumeSurcharge = (shippingData?.volumeSurcharge ?? 0) > 0;
 
   // Prevent scroll when drawer is open
   useEffect(() => {
@@ -109,12 +126,15 @@ export function CartDrawer() {
               <div className="bg-zinc-900/30 border border-white/5 flex flex-col gap-3 rounded-none relative" style={{ padding: '20px' }}>
                 <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest">
                   <div className="flex items-center gap-2">
-                    <Truck className={cn("h-4 w-4", isFreeShipping ? "text-emerald-400 animate-bounce" : "text-brand-primary")} />
-                    {isFreeShipping ? (
-                      <span className="text-emerald-400">¡Calificas para Envío Nacional Gratis!</span>
+                    <Truck className={cn("h-4 w-4", isFreeBaseShipping ? "text-emerald-400 animate-bounce" : "text-brand-primary")} />
+                    {isFreeBaseShipping ? (
+                      <span className="text-emerald-400">
+                        ¡Calificas para Envío Base Gratis!
+                        {hasVolumeSurcharge && <span className="text-amber-400 block text-[8px] mt-0.5">*Aplica recargo extra por gran volumen</span>}
+                      </span>
                     ) : (
                       <span className="text-zinc-400">
-                        Faltan <strong className="text-white font-mono text-[10px]">{formatUSD(remainingForFreeShipping)}</strong> para Envío Gratis
+                        Faltan <strong className="text-white font-mono text-[10px]">{formatUSD(remainingForFreeShipping)}</strong> para Envío Base Gratis
                       </span>
                     )}
                   </div>
@@ -124,7 +144,7 @@ export function CartDrawer() {
                   <div
                     className={cn(
                       "h-full transition-all duration-700 ease-out",
-                      isFreeShipping ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-brand-primary"
+                      isFreeBaseShipping ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-brand-primary"
                     )}
                     style={{ width: `${progressPercent}%` }}
                   />
@@ -273,19 +293,25 @@ export function CartDrawer() {
                 <span className="text-zinc-400 font-mono">{formatBsS(subtotalBs)}</span>
               </div>
               <div className="flex items-center justify-between text-zinc-500 text-[10px] font-black uppercase tracking-widest border-t border-white/5 pt-2.5">
-                <span>Envío Nacional</span>
-                {isFreeShipping ? (
-                  <span className="text-emerald-400 font-black tracking-wider text-[9px] bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-none">GRATIS</span>
+                <span>Costo de Envío (Est.)</span>
+                {shippingData ? (
+                  <div className="flex flex-col items-end">
+                    {shippingData.baseFee === 0 ? (
+                       <span className="text-emerald-400 font-black tracking-wider text-[9px] bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-none mb-1">BASE GRATIS</span>
+                    ) : null}
+                    <span className="text-zinc-400 font-mono">
+                      {shippingData.totalFee > 0 ? formatUSD(shippingData.totalFee) : 'GRATIS'}
+                    </span>
+                  </div>
                 ) : (
-                  <span className="text-zinc-400 text-[9px]">CALCULADO EN CHECKOUT</span>
+                  <span className="text-zinc-400 text-[9px]">CALCULANDO...</span>
                 )}
               </div>
               
               <div className="flex items-baseline justify-between border-t border-dashed border-white/10 pt-4 mt-2">
                 <span className="text-white text-xs font-black uppercase tracking-widest italic font-outfit">TOTAL ESTIMADO</span>
                 <div className="flex flex-col items-end">
-                  <span className="text-lg font-mono font-black text-white">{formatUSD(subtotalUsd)}</span>
-                  <span className="text-[11px] font-mono text-zinc-400 font-bold mt-0.5">{formatBsS(subtotalBs)}</span>
+                  <span className="text-lg font-mono font-black text-white">{formatUSD(subtotalUsd + (shippingData?.totalFee ?? 0))}</span>
                 </div>
               </div>
             </div>

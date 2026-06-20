@@ -31,6 +31,8 @@ export const createOrderSchema = z.object({
   customerDocumentId: z.string().optional(),
   customerPhone: z.string().optional(),
   deliveryMethod: z.enum(['PICKUP', 'DELIVERY']).default('PICKUP'),
+  deliveryState: z.string().max(100).optional(),
+  deliveryCity: z.string().max(100).optional(),
   deliveryAddressText: z.string().max(800).optional(),
   deliveryLat: z.number().min(-90).max(90).optional(),
   deliveryLng: z.number().min(-180).max(180).optional(),

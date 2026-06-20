@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ArrowRight, CheckCircle, Loader2, Send } from 'lucide-react';
 import { useTRPC } from '@/lib/trpc-client';
 import { useSession } from '@/lib/auth-client';
@@ -21,6 +21,13 @@ type CreatedOrder = {
 
 type PaymentMethod = 'pago_movil' | 'transferencia' | 'zelle' | 'efectivo_usd';
 type DeliveryMethod = 'PICKUP' | 'DELIVERY';
+type CartItem = ReturnType<typeof useCartStore.getState>['items'][number];
+type SessionCheckoutUser = {
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  cedula?: string | null;
+};
 
 const paymentLabels: Record<PaymentMethod, string> = {
   pago_movil: 'Pago Móvil',
@@ -32,6 +39,7 @@ const paymentLabels: Record<PaymentMethod, string> = {
 export default function CheckoutPage() {
   const trpc = useTRPC();
   const { data: session } = useSession();
+  const sessionUser = session?.user as SessionCheckoutUser | undefined;
   const items = useCartStore((state) => state.items);
   const clearCart = useCartStore((state) => state.clearCart);
   const subtotalUsd = useCartStore((state) => state.getSubtotalUsd());
@@ -41,10 +49,10 @@ export default function CheckoutPage() {
   const [createdOrder, setCreatedOrder] = useState<CreatedOrder | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [name, setName] = useState(session?.user?.name || '');
-  const [email, setEmail] = useState(session?.user?.email || '');
-  const [phone, setPhone] = useState('');
-  const [cedula, setCedula] = useState('');
+  const [name, setName] = useState<string | undefined>();
+  const [email, setEmail] = useState<string | undefined>();
+  const [phone, setPhone] = useState<string | undefined>();
+  const [cedula, setCedula] = useState<string | undefined>();
   const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>('PICKUP');
   const [stateName, setStateName] = useState('Zulia');
   const [cityName, setCityName] = useState('Maracaibo');
@@ -61,8 +69,30 @@ export default function CheckoutPage() {
   const createOrderMutation = useMutation(trpc.order.create.mutationOptions());
   const submitPaymentMutation = useMutation(trpc.payment.submit.mutationOptions());
 
+  const totalItems = items.reduce((acc, item) => acc + item.quantity, 0);
+
+  const { data: shippingData } = useQuery({
+    ...trpc.order.getShippingCost.queryOptions({
+      state: stateName,
+      city: cityName,
+      lat: deliveryLocation.lat,
+      lng: deliveryLocation.lng,
+      itemsTotalUsd: subtotalUsd,
+      totalQuantity: totalItems,
+    }),
+    enabled: items.length > 0 && deliveryMethod === 'DELIVERY',
+  });
+
+  const finalShippingFee = deliveryMethod === 'DELIVERY' ? (shippingData?.totalFee ?? 0) : 0;
+  const finalTotalUsd = subtotalUsd + finalShippingFee;
+
   const rate = subtotalUsd > 0 ? subtotalBs / subtotalUsd : 36.715;
+  const finalTotalBs = finalTotalUsd * rate;
   const isUsdPayment = paymentMethod === 'zelle' || paymentMethod === 'efectivo_usd';
+  const customerName = name ?? sessionUser?.name ?? '';
+  const customerEmail = email ?? sessionUser?.email ?? '';
+  const customerPhone = phone ?? sessionUser?.phone ?? '';
+  const customerCedula = cedula ?? sessionUser?.cedula ?? '';
 
   const handlePlaceOrder = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -88,25 +118,27 @@ export default function CheckoutPage() {
         exchangeRate: rate,
         paymentMethod,
         deliveryMethod,
+        deliveryState: deliveryMethod === 'DELIVERY' ? stateName : undefined,
+        deliveryCity: deliveryMethod === 'DELIVERY' ? cityName : undefined,
         deliveryAddressText:
           deliveryMethod === 'DELIVERY' ? deliveryLocation.address : undefined,
         deliveryLat: deliveryMethod === 'DELIVERY' ? deliveryLocation.lat : undefined,
         deliveryLng: deliveryMethod === 'DELIVERY' ? deliveryLocation.lng : undefined,
-        customerName: name,
-        customerEmail: email,
+        customerName,
+        customerEmail,
         note:
           deliveryMethod === 'DELIVERY'
             ? `Envio a: ${stateName}, ${cityName}. ${deliveryLocation.address}. GPS ${deliveryLocation.lat}, ${deliveryLocation.lng}`
             : 'Retiro en Tienda',
-        customerDocumentId: cedula,
-        customerPhone: phone,
+        customerDocumentId: customerCedula,
+        customerPhone,
       });
 
       setCreatedOrder({
         id: order.id,
         orderNumber: order.orderNumber,
-        totalUsd: Number(order.totalUsd ?? subtotalUsd),
-        totalBss: Number(order.totalBss ?? subtotalBs),
+        totalUsd: Number(order.totalUsd ?? finalTotalUsd),
+        totalBss: Number(order.totalBss ?? finalTotalBs),
       });
 
       if (paymentMethod !== 'efectivo_usd') {
@@ -115,8 +147,8 @@ export default function CheckoutPage() {
           orderId: order.id,
           method: paymentMethod,
           reference: reference || `REF-${Date.now().toString().slice(-8)}`,
-          amountUsd: subtotalUsd,
-          amountBs: subtotalBs,
+          amountUsd: finalTotalUsd,
+          amountBs: finalTotalBs,
           exchangeRate: rate,
           bankName: selectedBank?.name ?? 'Zelle',
           accountLastFour: accountLastFour || '0000',
@@ -139,7 +171,7 @@ export default function CheckoutPage() {
       ? formatUSD(createdOrder.totalUsd)
       : formatBsS(createdOrder.totalBss);
     const storePhone = toWhatsappPhone(STORE_INFO.phone);
-    const waText = `Hola Clazico Store. Pedido ${createdOrder.orderNumber} por ${totalString}. Método: ${paymentLabels[paymentMethod]}. Nombre: ${name}.`;
+    const waText = `Hola Clazico Store. Pedido ${createdOrder.orderNumber} por ${totalString}. Método: ${paymentLabels[paymentMethod]}. Nombre: ${customerName}.`;
     const waUrl = `https://wa.me/${storePhone}?text=${encodeURIComponent(waText)}`;
 
     return (
@@ -167,6 +199,11 @@ export default function CheckoutPage() {
           <Link href="/catalog" className="mt-5 inline-block text-xs font-black uppercase tracking-widest text-brand-primary hover:text-white transition-colors">
             Volver al catálogo
           </Link>
+          {session?.user && (
+            <Link href="/profile" className="mt-4 block text-xs font-black uppercase tracking-widest text-white hover:text-brand-primary transition-colors">
+              Ver mis pedidos
+            </Link>
+          )}
         </div>
       </div>
     );
@@ -208,7 +245,7 @@ export default function CheckoutPage() {
                 <Field label="Nombre Completo">
                   <input
                     required
-                    value={name}
+                    value={customerName}
                     onChange={(event) => setName(event.target.value)}
                     className="checkout-input font-sans text-xs font-bold uppercase tracking-wider"
                     placeholder="EJ: YOEL PINTO"
@@ -217,7 +254,7 @@ export default function CheckoutPage() {
                 <Field label="Cédula de Identidad">
                   <input
                     required
-                    value={cedula}
+                    value={customerCedula}
                     onChange={(event) => setCedula(event.target.value)}
                     className="checkout-input font-mono text-xs font-bold uppercase tracking-wider"
                     placeholder="EJ: V-12345678"
@@ -227,7 +264,7 @@ export default function CheckoutPage() {
                   <input
                     required
                     type="tel"
-                    value={phone}
+                    value={customerPhone}
                     onChange={(event) => setPhone(event.target.value)}
                     className="checkout-input font-mono text-xs font-bold uppercase tracking-wider"
                     placeholder="EJ: 04120000000"
@@ -237,7 +274,7 @@ export default function CheckoutPage() {
                   <input
                     required
                     type="email"
-                    value={email}
+                    value={customerEmail}
                     onChange={(event) => setEmail(event.target.value)}
                     className="checkout-input font-sans text-xs font-bold uppercase tracking-wider"
                     placeholder="EJ: CLIENTE@CORREO.COM"
@@ -334,8 +371,11 @@ export default function CheckoutPage() {
             <OrderSummary
               items={items}
               subtotalUsd={subtotalUsd}
-              subtotalBs={subtotalBs}
+              shippingFee={finalShippingFee}
+              totalUsd={finalTotalUsd}
+              totalBs={finalTotalBs}
               deliveryMethod={deliveryMethod}
+              rate={rate}
               isSubmitting={isSubmitting}
             />
           </aside>
@@ -525,14 +565,20 @@ function PaymentInstructions({
 function OrderSummary({
   items,
   subtotalUsd,
-  subtotalBs,
+  shippingFee,
+  totalUsd,
+  totalBs,
   deliveryMethod,
+  rate,
   isSubmitting,
 }: {
-  items: ReturnType<typeof useCartStore.getState>['items'];
+  items: CartItem[];
   subtotalUsd: number;
-  subtotalBs: number;
+  shippingFee: number;
+  totalUsd: number;
+  totalBs: number;
   deliveryMethod: DeliveryMethod;
+  rate: number;
   isSubmitting: boolean;
 }) {
   return (
@@ -562,12 +608,29 @@ function OrderSummary({
         ))}
       </div>
 
-      <div className="mt-5 space-y-3 border-t border-white/5 pt-5">
+      <div className="pt-4 border-t border-white/10 space-y-3">
         <SummaryLine label="Subtotal" value={formatUSD(subtotalUsd)} strong />
         {deliveryMethod === 'DELIVERY' && (
-          <SummaryLine label="Envío" value="Por cobrar" accent />
+           <SummaryLine 
+             label="Costo de Envío" 
+             value={shippingFee > 0 ? formatUSD(shippingFee) : 'GRATIS'} 
+             valueClass={shippingFee === 0 ? "text-emerald-400 font-black tracking-wider text-[10px] uppercase" : ""}
+           />
         )}
-        <SummaryLine label="Total Bs" value={formatBsS(subtotalBs)} />
+        <div className="flex justify-between items-end pt-4 mt-2 border-t border-dashed border-white/20">
+          <div>
+            <p className="font-outfit text-sm font-black uppercase italic tracking-wider text-white">Total USD</p>
+            <p className="font-mono text-[9px] font-bold text-zinc-500 uppercase tracking-widest mt-1">Tasa: {formatBsS(rate)}</p>
+          </div>
+          <div className="text-right">
+            <p className="font-mono text-2xl font-black text-brand-primary drop-shadow-[0_0_12px_rgba(255,255,255,0.15)]">
+              {formatUSD(totalUsd)}
+            </p>
+            <p className="font-mono text-[10px] font-bold text-zinc-400 mt-1 uppercase tracking-widest">
+              ~ {formatBsS(totalBs)}
+            </p>
+          </div>
+        </div>
       </div>
 
       <button
@@ -588,11 +651,13 @@ function SummaryLine({
   value,
   strong,
   accent,
+  valueClass,
 }: {
   label: string;
   value: string;
   strong?: boolean;
   accent?: boolean;
+  valueClass?: string;
 }) {
   return (
     <div className="flex items-center justify-between gap-4">
@@ -602,7 +667,7 @@ function SummaryLine({
       <span
         className={cn(
           'font-mono text-xs font-black',
-          accent ? 'text-brand-primary' : strong ? 'text-white' : 'text-zinc-400',
+          valueClass ? valueClass : (accent ? 'text-brand-primary' : strong ? 'text-white' : 'text-zinc-400'),
         )}
       >
         {value}

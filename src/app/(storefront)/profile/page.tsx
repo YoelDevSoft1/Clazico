@@ -1,12 +1,32 @@
 'use client';
 
 import Link from 'next/link';
-import { PackageCheck, ShieldCheck, UserRound } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import {
+  CalendarDays,
+  Loader2,
+  MessageCircle,
+  PackageCheck,
+  PackageOpen,
+  ReceiptText,
+  ShieldCheck,
+  UserRound,
+} from 'lucide-react';
 import { signOut, useSession } from '@/lib/auth-client';
-import { cn } from '@/lib/utils';
+import { useTRPC } from '@/lib/trpc-client';
+import { cn, formatBsS, formatDate, formatUSD } from '@/lib/utils';
 
 export default function ProfilePage() {
+  const trpc = useTRPC();
   const { data: session, isPending } = useSession();
+  const ordersQuery = useQuery(
+    trpc.order.myOrders.queryOptions(
+      { limit: 20, offset: 0 },
+      { enabled: Boolean(session?.user) },
+    ),
+  );
+
+  const orders = ordersQuery.data?.items ?? [];
 
   return (
     <div className="min-h-dvh bg-zinc-950 pb-28 text-white md:pb-44">
@@ -22,7 +42,7 @@ export default function ProfilePage() {
             <div className="mt-4 h-4 w-64 max-w-full rounded-full bg-white/10 animate-pulse" />
           </div>
         ) : session?.user ? (
-          <div className="mt-8 grid gap-6 md:grid-cols-[1fr_0.8fr]">
+          <div className="mt-8 grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
             
             {/* Club Card / User Details */}
             <section className="border border-white/5 bg-zinc-900/30 p-5 md:p-8">
@@ -51,7 +71,7 @@ export default function ProfilePage() {
 
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
                 <InfoTile icon={ShieldCheck} title="Pago Verificado" text="Tus comprobantes se validan manualmente con el banco de origen en Venezuela." />
-                <InfoTile icon={PackageCheck} title="Tus Pedidos" text="Historial y estado de tus compras vinculadas a Velox POS próximamente." />
+                <InfoTile icon={PackageCheck} title="Tus Pedidos" text="Las compras realizadas con esta cuenta quedan vinculadas a tu usuario." />
               </div>
 
               <button
@@ -62,33 +82,12 @@ export default function ProfilePage() {
               </button>
             </section>
 
-            {/* Support / Purchases Sidebar */}
-            <aside className="border border-white/5 bg-zinc-900/30 p-5 md:p-8 flex flex-col justify-between">
-              <div>
-                <h2 className="font-outfit text-lg font-black uppercase italic tracking-wider text-white border-b border-white/5 pb-3">
-                  Pedidos
-                </h2>
-                <p className="mt-4 text-xs leading-6 text-zinc-400 uppercase tracking-wider font-bold">
-                  Para reportar un pago de un pedido activo o consultar el estado de tu entrega, por favor escríbenos directamente por WhatsApp indicando tu código de referencia.
-                </p>
-              </div>
-              <div className="mt-6 space-y-3">
-                <Link
-                  href="/catalog"
-                  className="flex h-12 w-full items-center justify-center border border-white bg-white text-xs font-black uppercase tracking-widest text-zinc-950 hover:bg-transparent hover:text-white transition-colors"
-                >
-                  Seguir Comprando
-                </Link>
-                <a
-                  href="https://wa.me/584120000000"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex h-12 w-full items-center justify-center border border-white/10 bg-transparent text-xs font-black uppercase tracking-widest text-white hover:bg-white/5 transition-colors"
-                >
-                  Soporte WhatsApp
-                </a>
-              </div>
-            </aside>
+            <OrdersPanel
+              isLoading={ordersQuery.isLoading}
+              isError={ordersQuery.isError}
+              orders={orders}
+              total={ordersQuery.data?.total ?? 0}
+            />
           </div>
         ) : (
           <div className="mt-8 border border-white/5 bg-zinc-900/30 p-6 text-center max-w-xl mx-auto">
@@ -112,6 +111,23 @@ export default function ProfilePage() {
   );
 }
 
+type OrderSummaryRow = {
+  id: string;
+  orderNumber: string;
+  status: string;
+  totalUsd: string | number;
+  totalBss: string | number | null;
+  deliveryMethod: string;
+  createdAt: Date | string;
+};
+
+type OrdersPanelProps = {
+  isLoading: boolean;
+  isError: boolean;
+  orders: OrderSummaryRow[];
+  total: number;
+};
+
 type InfoTileProps = {
   icon: typeof ShieldCheck;
   title: string;
@@ -125,5 +141,183 @@ function InfoTile({ icon: Icon, title, text }: InfoTileProps) {
       <p className="mt-3 text-[10px] font-black uppercase tracking-wider text-white">{title}</p>
       <p className="mt-1.5 text-[10px] leading-5 font-bold uppercase tracking-wider text-zinc-500">{text}</p>
     </div>
+  );
+}
+
+function OrdersPanel({ isLoading, isError, orders, total }: OrdersPanelProps) {
+  return (
+    <section className="border border-white/5 bg-zinc-900/30 p-5 md:p-8">
+      <div className="flex flex-col gap-3 border-b border-white/5 pb-5 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="font-outfit text-lg font-black uppercase italic tracking-wider text-white">
+            Mis Pedidos
+          </h2>
+          <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-zinc-500">
+            Historial vinculado a tu cuenta Clazico
+          </p>
+        </div>
+        {total > 0 && (
+          <span className="inline-flex h-8 w-fit items-center border border-white/10 px-3 text-[10px] font-black uppercase tracking-widest text-zinc-400">
+            {total} {total === 1 ? 'orden' : 'ordenes'}
+          </span>
+        )}
+      </div>
+
+      {isLoading ? (
+        <div className="grid min-h-56 place-items-center">
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="h-8 w-8 animate-spin text-brand-primary" />
+            <p className="athletic-tag text-zinc-500">Cargando pedidos...</p>
+          </div>
+        </div>
+      ) : isError ? (
+        <div className="mt-5 border border-brand-primary/20 bg-brand-primary/10 p-5">
+          <p className="text-xs font-black uppercase tracking-wider text-brand-primary">
+            No pudimos cargar tus pedidos. Intenta nuevamente en unos segundos.
+          </p>
+        </div>
+      ) : orders.length === 0 ? (
+        <div className="mt-5 grid min-h-56 place-items-center border border-white/5 bg-zinc-950 p-6 text-center">
+          <div className="max-w-sm">
+            <PackageOpen className="mx-auto h-9 w-9 text-zinc-600" />
+            <p className="mt-4 font-outfit text-lg font-black uppercase italic text-white">
+              Sin pedidos todavia
+            </p>
+            <p className="mt-2 text-[10px] font-bold uppercase leading-5 tracking-wider text-zinc-500">
+              Cuando compres con esta sesion activa, tus ordenes apareceran aqui.
+            </p>
+            <Link
+              href="/catalog"
+              className="mt-5 inline-flex h-11 items-center justify-center border border-white bg-white px-6 text-xs font-black uppercase tracking-widest text-zinc-950 transition-colors hover:bg-transparent hover:text-white"
+            >
+              Ver Catalogo
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-5 space-y-3">
+          {orders.map((order) => (
+            <OrderRow key={order.id} order={order} />
+          ))}
+          {total > orders.length && (
+            <p className="pt-2 text-center text-[10px] font-black uppercase tracking-widest text-zinc-600">
+              Mostrando las ultimas {orders.length} de {total} ordenes
+            </p>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function OrderRow({ order }: { order: OrderSummaryRow }) {
+  const status = getProfileOrderStatus(order.status);
+  const totalBss = order.totalBss === null ? null : Number(order.totalBss);
+  const whatsappText = `Hola Clazico Store. Quiero consultar la orden ${order.orderNumber}.`;
+  const whatsappUrl = `https://wa.me/584120000000?text=${encodeURIComponent(whatsappText)}`;
+
+  return (
+    <article className="border border-white/5 bg-zinc-950 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-white">
+            <ReceiptText className="h-4 w-4 text-brand-primary" />
+            <p className="truncate font-mono text-sm font-black uppercase tracking-wider">
+              {order.orderNumber}
+            </p>
+          </div>
+          <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+            <span className="inline-flex items-center gap-1">
+              <CalendarDays className="h-3.5 w-3.5" />
+              {formatDate(order.createdAt)}
+            </span>
+            <span>{getDeliveryMethodLabel(order.deliveryMethod)}</span>
+          </p>
+        </div>
+        <span className={cn('inline-flex h-8 w-fit items-center border px-3 text-[10px] font-black uppercase tracking-widest', status.className)}>
+          {status.label}
+        </span>
+      </div>
+
+      <div className="mt-4 grid gap-3 border-t border-white/5 pt-4 sm:grid-cols-[1fr_auto] sm:items-end">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="text-[9px] font-black uppercase tracking-widest text-zinc-600">Total USD</p>
+            <p className="mt-1 font-mono text-sm font-black text-white">{formatUSD(Number(order.totalUsd))}</p>
+          </div>
+          <div>
+            <p className="text-[9px] font-black uppercase tracking-widest text-zinc-600">Total Bs</p>
+            <p className="mt-1 font-mono text-sm font-black text-zinc-300">
+              {totalBss === null ? 'Por confirmar' : formatBsS(totalBss)}
+            </p>
+          </div>
+        </div>
+        <a
+          href={whatsappUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex h-10 items-center justify-center gap-2 border border-white/10 px-4 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:border-white hover:bg-white hover:text-zinc-950"
+        >
+          <MessageCircle className="h-4 w-4" />
+          Consultar
+        </a>
+      </div>
+    </article>
+  );
+}
+
+function getDeliveryMethodLabel(method: string): string {
+  const labels: Record<string, string> = {
+    PICKUP: 'Retiro en tienda',
+    DELIVERY: 'Delivery',
+    MRW: 'MRW',
+    ZOOM: 'ZOOM',
+    TEALCA: 'TEALCA',
+  };
+
+  return labels[method] ?? method;
+}
+
+function getProfileOrderStatus(status: string): { label: string; className: string } {
+  const statuses: Record<string, { label: string; className: string }> = {
+    PENDING: {
+      label: 'Pendiente',
+      className: 'border-amber-400/30 bg-amber-400/10 text-amber-300',
+    },
+    PAYMENT_UPLOADED: {
+      label: 'Pago reportado',
+      className: 'border-sky-400/30 bg-sky-400/10 text-sky-300',
+    },
+    PAYMENT_VERIFIED: {
+      label: 'Pago verificado',
+      className: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300',
+    },
+    PROCESSING: {
+      label: 'Preparando',
+      className: 'border-sky-400/30 bg-sky-400/10 text-sky-300',
+    },
+    SHIPPED: {
+      label: 'Enviado',
+      className: 'border-violet-400/30 bg-violet-400/10 text-violet-300',
+    },
+    DELIVERED: {
+      label: 'Entregado',
+      className: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300',
+    },
+    CANCELLED: {
+      label: 'Cancelado',
+      className: 'border-red-400/30 bg-red-400/10 text-red-300',
+    },
+    REFUNDED: {
+      label: 'Reembolsado',
+      className: 'border-zinc-400/30 bg-zinc-400/10 text-zinc-300',
+    },
+  };
+
+  return (
+    statuses[status] ?? {
+      label: status,
+      className: 'border-white/10 bg-white/5 text-zinc-300',
+    }
   );
 }
