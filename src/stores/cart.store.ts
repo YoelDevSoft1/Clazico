@@ -33,6 +33,11 @@ export interface CartItem {
   availableStock: number;
   /** Product slug for linking. */
   slug: string;
+  /** Lookbook recipe context, when the item was added from a curated drop. */
+  lookbookSlug?: string;
+  lookbookTitle?: string;
+  lookbookItemId?: string;
+  lookbookRole?: string;
   /**
    * True for legacy carts that did not have a `variantId`. Such items are
    * kept in the cart but force a re-sync at the PDP before they can be
@@ -165,6 +170,10 @@ export const useCartStore = create<CartStore>()(
             updatedItems[existingIndex] = {
               ...existing,
               ...newItem,
+              lookbookSlug: newItem.lookbookSlug,
+              lookbookTitle: newItem.lookbookTitle,
+              lookbookItemId: newItem.lookbookItemId,
+              lookbookRole: newItem.lookbookRole,
               quantity: Math.min(newQty, existing.availableStock),
             };
             return { items: updatedItems, isOpen: true };

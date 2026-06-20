@@ -18,6 +18,11 @@ import {
 import { orderNumberService } from '@/server/services/order-number.service';
 import type { VeloxWebOrderPayload } from '@/server/services/velox-pos.service';
 import { calculateShippingCost, SHIPPING_CONFIG } from '@/server/services/shipping.service';
+import {
+  resolveLookbookSaleRecipe,
+  type LookbookSaleRecipe,
+  type LookbookSaleRule,
+} from '@/server/services/lookbook-recipe.service';
 
 export const orderRouter = createTRPCRouter({
   /**
@@ -64,6 +69,9 @@ export const orderRouter = createTRPCRouter({
       }
 
       const resolvedItems = await resolveOrderItems(ctx, input, exchangeRate);
+      const lookbookSale = input.lookbookSlug
+        ? await validateLookbookSale(ctx, input.lookbookSlug, resolvedItems)
+        : null;
 
       // 1) Stock re-validation. Each item can have a variantId; we
       //    call Velox for the parent product and (when relevant) the
@@ -169,6 +177,9 @@ export const orderRouter = createTRPCRouter({
             deliveryLng:
               input.deliveryLng === undefined ? null : String(input.deliveryLng),
             customerNotes: input.note ?? null,
+            lookbookId: lookbookSale?.lookbookId ?? null,
+            lookbookSlug: lookbookSale?.slug ?? null,
+            lookbookTitle: lookbookSale?.title ?? null,
             idempotencyKey,
           })
           .returning();
@@ -186,6 +197,8 @@ export const orderRouter = createTRPCRouter({
             veloxProductId: item.productId,
             variantId: item.veloxVariantId,
             variantSku: item.variantSku,
+            lookbookItemId: item.lookbookItemId ?? null,
+            lookbookRole: item.lookbookRole ?? null,
             productName: item.productName,
             productSku: item.productSku,
             quantity: item.quantity,
@@ -251,7 +264,7 @@ export const orderRouter = createTRPCRouter({
                 reported_at: null,
               }
             : null,
-          notes: input.note ?? null,
+          notes: formatOrderNotes(input.note, lookbookSale),
         };
 
         await tx.insert(schema.outbox).values({
@@ -563,6 +576,8 @@ interface ResolvedOrderItem {
   quantity: number;
   unitPriceUsd: number;
   unitPriceBs: number;
+  lookbookItemId?: string | null;
+  lookbookRole?: string | null;
 }
 
 async function resolveOrderItems(
@@ -632,8 +647,96 @@ async function resolveOrderItems(
       quantity: item.quantity,
       unitPriceUsd,
       unitPriceBs: Number((unitPriceUsd * exchangeRate).toFixed(2)),
+      lookbookItemId: null,
+      lookbookRole: null,
     });
   }
 
   return resolved;
+}
+
+async function validateLookbookSale(
+  ctx: TRPCContext,
+  slug: string,
+  items: ResolvedOrderItem[],
+): Promise<LookbookSaleRecipe> {
+  const recipe = await resolveLookbookSaleRecipe(ctx.db, slug);
+  if (!recipe) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Este lookbook no tiene una receta de venta activa',
+    });
+  }
+
+  if (recipe.rules.length === 0) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Este lookbook no tiene piezas vendibles configuradas',
+    });
+  }
+
+  const customerItems = items.filter(
+    (item) => item.productId !== SHIPPING_CONFIG.VELOX_DELIVERY_PRODUCT_ID,
+  );
+
+  for (const item of customerItems) {
+    const rule = findMatchingLookbookRule(recipe.rules, item);
+    if (!rule) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `${item.productName} no pertenece al lookbook ${recipe.title}`,
+      });
+    }
+
+    if (item.quantity < rule.minQuantity || item.quantity > rule.maxQuantity) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `${item.productName} debe comprarse en cantidad ${rule.minQuantity}-${rule.maxQuantity} dentro del lookbook ${recipe.title}`,
+      });
+    }
+
+    item.lookbookItemId = rule.id;
+    item.lookbookRole = rule.role;
+  }
+
+  for (const rule of recipe.rules) {
+    if (!rule.isRequired) continue;
+
+    const quantity = customerItems
+      .filter((item) => ruleMatchesResolvedItem(rule, item))
+      .reduce((sum, item) => sum + item.quantity, 0);
+
+    if (quantity < rule.minQuantity) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `El lookbook ${recipe.title} requiere ${rule.productName}`,
+      });
+    }
+  }
+
+  return recipe;
+}
+
+function findMatchingLookbookRule(
+  rules: LookbookSaleRule[],
+  item: ResolvedOrderItem,
+): LookbookSaleRule | undefined {
+  return rules.find((rule) => ruleMatchesResolvedItem(rule, item));
+}
+
+function ruleMatchesResolvedItem(
+  rule: LookbookSaleRule,
+  item: ResolvedOrderItem,
+): boolean {
+  if (rule.productId !== item.productId) return false;
+  return !rule.variantId || rule.variantId === item.veloxVariantId;
+}
+
+function formatOrderNotes(note: string | undefined, lookbookSale: LookbookSaleRecipe | null): string | null {
+  const parts = [
+    note?.trim() || null,
+    lookbookSale ? `Lookbook: ${lookbookSale.title} (${lookbookSale.slug})` : null,
+  ].filter(Boolean);
+
+  return parts.length > 0 ? parts.join('\n') : null;
 }

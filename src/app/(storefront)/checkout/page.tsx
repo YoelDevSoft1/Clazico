@@ -70,6 +70,10 @@ export default function CheckoutPage() {
   const submitPaymentMutation = useMutation(trpc.payment.submit.mutationOptions());
 
   const totalItems = items.reduce((acc, item) => acc + item.quantity, 0);
+  const lookbookSlugs = Array.from(
+    new Set(items.map((item) => item.lookbookSlug).filter(Boolean)),
+  ) as string[];
+  const activeLookbookSlug = lookbookSlugs.length === 1 ? lookbookSlugs[0] : undefined;
 
   const { data: shippingData } = useQuery({
     ...trpc.order.getShippingCost.queryOptions({
@@ -97,6 +101,10 @@ export default function CheckoutPage() {
   const handlePlaceOrder = async (event: React.FormEvent) => {
     event.preventDefault();
     if (items.length === 0) return;
+    if (lookbookSlugs.length > 1) {
+      alert('Tu carrito mezcla varios lookbooks. Finaliza un drop a la vez para mantener la venta coherente.');
+      return;
+    }
 
     try {
       setIsSubmitting(true);
@@ -107,12 +115,15 @@ export default function CheckoutPage() {
             item.legacy || item.variantId.startsWith('product::')
               ? undefined
               : item.variantId,
+          lookbookItemId: item.lookbookItemId,
+          lookbookRole: item.lookbookRole,
           quantity: item.quantity,
           unitPriceUsd: item.priceUsd,
           unitPriceBs: item.priceBs,
           size: item.size ?? undefined,
           color: item.color ?? undefined,
         })),
+        lookbookSlug: activeLookbookSlug,
         shippingAddressId: '00000000-0000-0000-0000-000000000000',
         currency: isUsdPayment ? 'USD' : 'BS',
         exchangeRate: rate,

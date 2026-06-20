@@ -100,7 +100,7 @@ class WebOrderSyncService {
           reported_at: latestPayment.createdAt?.toISOString?.() ?? null,
         }
         : null,
-      notes: order.adminNotes ?? order.customerNotes ?? null,
+      notes: formatNotes(order.adminNotes ?? order.customerNotes, order.lookbookTitle, order.lookbookSlug),
     };
   }
 
@@ -120,4 +120,17 @@ function extractDeliveryState(note: string | null): string | null {
 function extractDeliveryCity(note: string | null): string | null {
   if (!note?.startsWith('Envio a:')) return null;
   return note.replace('Envio a:', '').split(',')[1]?.split('.')[0]?.trim() || null;
+}
+
+function formatNotes(
+  note: string | null,
+  lookbookTitle: string | null,
+  lookbookSlug: string | null,
+): string | null {
+  const parts = [
+    note?.trim() || null,
+    lookbookTitle ? `Lookbook: ${lookbookTitle}${lookbookSlug ? ` (${lookbookSlug})` : ''}` : null,
+  ].filter(Boolean);
+
+  return parts.length > 0 ? parts.join('\n') : null;
 }

@@ -5,6 +5,7 @@ import {
   createTRPCRouter,
   publicProcedure,
 } from '@/server/trpc/init';
+import { listStorefrontLookbooks } from '@/server/services/lookbook-recipe.service';
 
 export const lookbookRouter = createTRPCRouter({
   /**
@@ -17,6 +18,15 @@ export const lookbookRouter = createTRPCRouter({
       .where(eq(schema.lookbooks.isPublished, true))
       .orderBy(asc(schema.lookbooks.sortOrder));
     return lookbooks;
+  }),
+
+  /**
+   * List published lookbooks with sellable recipe items resolved from Velox
+   * product cache. Falls back to the editorial drops when no DB lookbooks
+   * exist yet, so the public storefront remains usable.
+   */
+  listForStorefront: publicProcedure.query(async ({ ctx }) => {
+    return listStorefrontLookbooks(ctx.db);
   }),
 
   /**

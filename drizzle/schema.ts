@@ -321,6 +321,11 @@ export const orders = pgTable(
     deliveryLng: decimal("delivery_lng", { precision: 10, scale: 7 }),
     customerNotes: text("customer_notes"),
     adminNotes: text("admin_notes"),
+    lookbookId: uuid("lookbook_id").references(() => lookbooks.id, {
+      onDelete: "set null",
+    }),
+    lookbookSlug: varchar("lookbook_slug", { length: 300 }),
+    lookbookTitle: varchar("lookbook_title", { length: 300 }),
     veloxSaleId: varchar("velox_sale_id", { length: 100 }),
     /** Idempotency key propagated to Velox (webhook replay protection) */
     idempotencyKey: text("idempotency_key"),
@@ -336,6 +341,8 @@ export const orders = pgTable(
     uniqueIndex("orders_order_number_idx").on(table.orderNumber),
     index("orders_customer_id_idx").on(table.customerId),
     index("orders_status_idx").on(table.status),
+    index("orders_lookbook_id_idx").on(table.lookbookId),
+    index("orders_lookbook_slug_idx").on(table.lookbookSlug),
     index("orders_velox_sale_id_idx").on(table.veloxSaleId),
     uniqueIndex("orders_idempotency_key_idx").on(table.idempotencyKey),
     index("orders_created_at_idx").on(table.createdAt),
@@ -354,6 +361,10 @@ export const orderItems = pgTable(
     veloxProductId: varchar("velox_product_id", { length: 100 }).notNull(),
     variantId: uuid("variant_id"),
     variantSku: varchar("variant_sku", { length: 100 }),
+    lookbookItemId: uuid("lookbook_item_id").references(() => lookbookItems.id, {
+      onDelete: "set null",
+    }),
+    lookbookRole: varchar("lookbook_role", { length: 100 }),
     productName: varchar("product_name", { length: 500 }).notNull(),
     productSku: varchar("product_sku", { length: 100 }).notNull(),
     quantity: integer("quantity").notNull(),
@@ -371,6 +382,7 @@ export const orderItems = pgTable(
     index("order_items_order_id_idx").on(table.orderId),
     index("order_items_velox_product_id_idx").on(table.veloxProductId),
     index("order_items_variant_id_idx").on(table.variantId),
+    index("order_items_lookbook_item_id_idx").on(table.lookbookItemId),
   ]
 );
 
@@ -585,6 +597,43 @@ export const lookbookImages = pgTable(
   ]
 );
 
+// ── Lookbook Sellable Recipe Items ───────────────────────────
+
+export const lookbookItems = pgTable(
+  "lookbook_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    lookbookId: uuid("lookbook_id")
+      .notNull()
+      .references(() => lookbooks.id, { onDelete: "cascade" }),
+    productCacheId: uuid("product_cache_id")
+      .notNull()
+      .references(() => productCache.id, { onDelete: "restrict" }),
+    variantId: uuid("variant_id").references(() => productVariants.id, {
+      onDelete: "set null",
+    }),
+    role: varchar("role", { length: 100 }).default("piece").notNull(),
+    label: varchar("label", { length: 200 }),
+    isRequired: boolean("is_required").default(true).notNull(),
+    minQuantity: integer("min_quantity").default(1).notNull(),
+    maxQuantity: integer("max_quantity").default(1).notNull(),
+    sortOrder: integer("sort_order").default(0).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("lookbook_items_lookbook_id_idx").on(table.lookbookId),
+    index("lookbook_items_product_cache_id_idx").on(table.productCacheId),
+    index("lookbook_items_variant_id_idx").on(table.variantId),
+    index("lookbook_items_sort_order_idx").on(table.sortOrder),
+  ],
+);
+
 // ── Site Config (key-value) ──────────────────────────────────
 
 export const siteConfig = pgTable(
@@ -625,15 +674,17 @@ export const addressesRelations = relations(addresses, ({ one }) => ({
 export const productCacheRelations = relations(productCache, ({ many }) => ({
   images: many(productImageCache),
   variants: many(productVariants),
+  lookbookItems: many(lookbookItems),
 }));
 
 export const productVariantsRelations = relations(
   productVariants,
-  ({ one }) => ({
+  ({ one, many }) => ({
     product: one(productCache, {
       fields: [productVariants.productCacheId],
       references: [productCache.id],
     }),
+    lookbookItems: many(lookbookItems),
   }),
 );
 
@@ -663,6 +714,10 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
     fields: [orders.id],
     references: [ordersSync.orderId],
   }),
+  lookbook: one(lookbooks, {
+    fields: [orders.lookbookId],
+    references: [lookbooks.id],
+  }),
 }));
 
 export const ordersSyncRelations = relations(ordersSync, ({ one }) => ({
@@ -676,6 +731,10 @@ export const orderItemsRelations = relations(orderItems, ({ one }) => ({
   order: one(orders, {
     fields: [orderItems.orderId],
     references: [orders.id],
+  }),
+  lookbookItem: one(lookbookItems, {
+    fields: [orderItems.lookbookItemId],
+    references: [lookbookItems.id],
   }),
 }));
 
@@ -702,6 +761,7 @@ export const orderStatusHistoryRelations = relations(
 
 export const lookbooksRelations = relations(lookbooks, ({ many }) => ({
   images: many(lookbookImages),
+  items: many(lookbookItems),
 }));
 
 export const lookbookImagesRelations = relations(
@@ -712,4 +772,23 @@ export const lookbookImagesRelations = relations(
       references: [lookbooks.id],
     }),
   })
+);
+
+export const lookbookItemsRelations = relations(
+  lookbookItems,
+  ({ one, many }) => ({
+    lookbook: one(lookbooks, {
+      fields: [lookbookItems.lookbookId],
+      references: [lookbooks.id],
+    }),
+    product: one(productCache, {
+      fields: [lookbookItems.productCacheId],
+      references: [productCache.id],
+    }),
+    variant: one(productVariants, {
+      fields: [lookbookItems.variantId],
+      references: [productVariants.id],
+    }),
+    orderItems: many(orderItems),
+  }),
 );

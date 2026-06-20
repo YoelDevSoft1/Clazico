@@ -3,6 +3,8 @@ import { z } from 'zod';
 export const orderItemSchema = z.object({
   productId: z.string().min(1, 'El ID del producto es requerido'),
   variantId: z.string().optional(),
+  lookbookItemId: z.string().optional(),
+  lookbookRole: z.string().max(100).optional(),
   quantity: z.number().int().positive('La cantidad debe ser mayor a 0'),
   unitPriceUsd: z.number().positive('El precio unitario USD debe ser mayor a 0'),
   unitPriceBs: z.number().positive('El precio unitario Bs debe ser mayor a 0'),
@@ -14,6 +16,7 @@ export const createOrderSchema = z.object({
   items: z
     .array(orderItemSchema)
     .min(1, 'El pedido debe tener al menos un producto'),
+  lookbookSlug: z.string().min(1).max(300).optional(),
   shippingAddressId: z.string().optional(),
   billingAddressId: z.string().optional(),
   currency: z.enum(['USD', 'BS']),
