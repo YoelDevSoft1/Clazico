@@ -20,6 +20,14 @@ async function main() {
         quantity: 1,
         unit_price_usd: 2,
         unit_price_bs: 1334
+      },
+      {
+        product_id: "00000000-0000-0000-0000-000000000000",
+        sku: "DELIVERY-FEE",
+        name: "Costo de Envío Local",
+        quantity: 1,
+        unit_price_usd: 5,
+        unit_price_bs: 3335
       }
     ],
     subtotal_usd: 2,

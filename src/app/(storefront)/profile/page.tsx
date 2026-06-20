@@ -13,6 +13,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import { signOut, useSession } from '@/lib/auth-client';
+import { STORE_INFO } from '@/lib/constants';
 import { useTRPC } from '@/lib/trpc-client';
 import { cn, formatBsS, formatDate, formatUSD } from '@/lib/utils';
 
@@ -213,8 +214,10 @@ function OrdersPanel({ isLoading, isError, orders, total }: OrdersPanelProps) {
 function OrderRow({ order }: { order: OrderSummaryRow }) {
   const status = getProfileOrderStatus(order.status);
   const totalBss = order.totalBss === null ? null : Number(order.totalBss);
-  const whatsappText = `Hola Clazico Store. Quiero consultar la orden ${order.orderNumber}.`;
-  const whatsappUrl = `https://wa.me/584120000000?text=${encodeURIComponent(whatsappText)}`;
+  const officialPhones = [
+    { label: 'WhatsApp Principal', phone: STORE_INFO.phone },
+    { label: 'WhatsApp Secundario', phone: STORE_INFO.phone1 },
+  ];
 
   return (
     <article className="border border-white/5 bg-zinc-950 p-4">
@@ -234,12 +237,26 @@ function OrderRow({ order }: { order: OrderSummaryRow }) {
             <span>{getDeliveryMethodLabel(order.deliveryMethod)}</span>
           </p>
         </div>
-        <span className={cn('inline-flex h-8 w-fit items-center border px-3 text-[10px] font-black uppercase tracking-widest', status.className)}>
-          {status.label}
-        </span>
+        <div className="shrink-0">
+          <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-zinc-600">
+            Estado actual
+          </p>
+          <span className={cn('inline-flex h-8 w-fit items-center border px-3 text-[10px] font-black uppercase tracking-widest', status.className)}>
+            {status.label}
+          </span>
+        </div>
       </div>
 
-      <div className="mt-4 grid gap-3 border-t border-white/5 pt-4 sm:grid-cols-[1fr_auto] sm:items-end">
+      <div className="mt-4 border border-white/5 bg-zinc-900/40 p-3">
+        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+          Seguimiento
+        </p>
+        <p className="mt-1.5 text-xs font-bold uppercase leading-5 tracking-wider text-zinc-300">
+          {status.description}
+        </p>
+      </div>
+
+      <div className="mt-4 grid gap-4 border-t border-white/5 pt-4">
         <div className="grid grid-cols-2 gap-3">
           <div>
             <p className="text-[9px] font-black uppercase tracking-widest text-zinc-600">Total USD</p>
@@ -252,18 +269,48 @@ function OrderRow({ order }: { order: OrderSummaryRow }) {
             </p>
           </div>
         </div>
-        <a
-          href={whatsappUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex h-10 items-center justify-center gap-2 border border-white/10 px-4 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:border-white hover:bg-white hover:text-zinc-950"
-        >
-          <MessageCircle className="h-4 w-4" />
-          Consultar
-        </a>
+
+        <div>
+          <p className="mb-2 text-[9px] font-black uppercase tracking-widest text-zinc-600">
+            Preguntar sobre esta orden
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {officialPhones.map((contact) => (
+              <a
+                key={contact.phone}
+                href={buildOrderWhatsAppUrl(contact.phone, order.orderNumber, status.label)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-11 items-center justify-center gap-2 border border-white/10 px-4 text-center text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:border-white hover:bg-white hover:text-zinc-950"
+              >
+                <MessageCircle className="h-4 w-4 shrink-0" />
+                <span>
+                  {contact.label}
+                  <span className="mt-1 block font-mono text-[9px] tracking-wider opacity-70">
+                    {contact.phone}
+                  </span>
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
       </div>
     </article>
   );
+}
+
+function buildOrderWhatsAppUrl(phone: string, orderNumber: string, statusLabel: string): string {
+  const whatsappPhone = toWhatsappPhone(phone);
+  const message = `Hola Clazico Store. Quiero consultar el estado de mi pedido ${orderNumber}. Estado actual en la web: ${statusLabel}.`;
+
+  return `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(message)}`;
+}
+
+function toWhatsappPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.startsWith('0')) return `58${digits.slice(1)}`;
+  if (digits.startsWith('58')) return digits;
+  return digits;
 }
 
 function getDeliveryMethodLabel(method: string): string {
@@ -278,38 +325,46 @@ function getDeliveryMethodLabel(method: string): string {
   return labels[method] ?? method;
 }
 
-function getProfileOrderStatus(status: string): { label: string; className: string } {
-  const statuses: Record<string, { label: string; className: string }> = {
+function getProfileOrderStatus(status: string): { label: string; description: string; className: string } {
+  const statuses: Record<string, { label: string; description: string; className: string }> = {
     PENDING: {
-      label: 'Pendiente',
+      label: 'Pendiente de pago',
+      description: 'Recibimos tu pedido. Falta reportar o validar el pago para continuar con la preparacion.',
       className: 'border-amber-400/30 bg-amber-400/10 text-amber-300',
     },
     PAYMENT_UPLOADED: {
       label: 'Pago reportado',
+      description: 'Tu comprobante fue recibido. El equipo de Clazico Store esta verificando la transaccion.',
       className: 'border-sky-400/30 bg-sky-400/10 text-sky-300',
     },
     PAYMENT_VERIFIED: {
       label: 'Pago verificado',
+      description: 'El pago fue verificado. Tu pedido queda listo para pasar a preparacion o despacho.',
       className: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300',
     },
     PROCESSING: {
       label: 'Preparando',
+      description: 'Estamos preparando tu pedido y confirmando los detalles de entrega o retiro.',
       className: 'border-sky-400/30 bg-sky-400/10 text-sky-300',
     },
     SHIPPED: {
       label: 'Enviado',
+      description: 'Tu pedido fue enviado. Puedes consultar por WhatsApp si necesitas guia o detalles del despacho.',
       className: 'border-violet-400/30 bg-violet-400/10 text-violet-300',
     },
     DELIVERED: {
       label: 'Entregado',
+      description: 'El pedido aparece como entregado. Contactanos si necesitas soporte posterior a la compra.',
       className: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300',
     },
     CANCELLED: {
       label: 'Cancelado',
+      description: 'Este pedido fue cancelado. Puedes contactar a Clazico Store para revisar el motivo.',
       className: 'border-red-400/30 bg-red-400/10 text-red-300',
     },
     REFUNDED: {
       label: 'Reembolsado',
+      description: 'Este pedido figura como reembolsado. Contactanos si necesitas soporte sobre el reintegro.',
       className: 'border-zinc-400/30 bg-zinc-400/10 text-zinc-300',
     },
   };
@@ -317,6 +372,7 @@ function getProfileOrderStatus(status: string): { label: string; className: stri
   return (
     statuses[status] ?? {
       label: status,
+      description: 'Estado recibido desde Clazico Store. Contactanos por WhatsApp para mas detalles de esta orden.',
       className: 'border-white/10 bg-white/5 text-zinc-300',
     }
   );
