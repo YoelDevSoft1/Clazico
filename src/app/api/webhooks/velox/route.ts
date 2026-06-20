@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     .insert(schema.webhookDeliveries)
     .values({
       eventId,
-      eventType: payload.type,
+      eventType: envelope.type,
       source: 'velox',
       payload: body,
       signature,
@@ -86,7 +86,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    await processWebhook(payload, db, schema);
+    await processWebhook(envelope as any, db, schema);
 
     await db
       .update(schema.webhookDeliveries)
