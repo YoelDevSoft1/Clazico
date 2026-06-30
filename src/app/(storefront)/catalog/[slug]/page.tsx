@@ -150,12 +150,6 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
     );
   }, [variants, selectedSize, selectedColor, sizeOptions, colorOptions]);
 
-  const usesOptionVariants =
-    variants.length > 0 &&
-    sizeOptions.length > 0 &&
-    colorOptions.length > 0 &&
-    !variants.some((v) => v.size && v.color);
-
   // Image source: variant image (when selected) > product image.
   const activeImageUrl = useMemo(() => {
     if (selectedVariant?.imageUrl) return selectedVariant.imageUrl;
@@ -238,7 +232,7 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
     isOutOfStock ||
     (!hasNoVariants && (sizeOptions.length > 0 && !selectedSize) ||
       (colorOptions.length > 0 && !selectedColor)) ||
-    (!!selectedVariant && !usesOptionVariants && selectedVariantStock <= 0);
+    (!!selectedVariant && selectedVariantStock <= 0);
 
   const handleAddToCart = () => {
     if (!hasNoVariants) {
@@ -251,7 +245,7 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
         return;
       }
     }
-    if (!selectedVariant && !hasNoVariants && !usesOptionVariants) {
+    if (!selectedVariant && !hasNoVariants) {
       setErrorMsg('COMBINACIÓN NO DISPONIBLE');
       return;
     }
@@ -277,13 +271,13 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
           slug: product.slug,
         }
       : {
-          variantId: `product::${product.veloxId}::${selectedSize || 'default'}::${selectedColor || 'default'}`,
+          variantId: `product::${product.veloxId}`,
           productId: product.veloxId,
           name: product.name,
           sku: product.sku,
-          size: selectedSize || null,
-          color: selectedColor || null,
-          colorHex: colorOptions.find((color) => color.name === selectedColor)?.hex ?? null,
+          size: null,
+          color: null,
+          colorHex: null,
           imageUrl: product.imageUrl ?? '',
           priceUsd: Number(product.priceUsd),
           priceBs: product.priceBs ? Number(product.priceBs) : 0,
@@ -394,7 +388,7 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
                     // A size is sold-out if no variant for it has stock.
                     const hasStock = variants.some(
                       (v) => v.size === size && v.currentStock > 0 && v.isActive,
-                    ) || usesOptionVariants;
+                    );
                     const isActive = selectedSize === size;
                     return (
                       <button
