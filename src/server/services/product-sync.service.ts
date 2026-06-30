@@ -126,7 +126,7 @@ class ProductSyncService {
       barcode: product.barcode,
       priceUsd: String(product.price_usd),
       priceBs: String(product.price_bs),
-      isActive: product.is_active && product.is_visible_public !== false,
+      isActive: product.is_active !== false,
       imageUrl: this.normalizeVeloxImageUrl(product.image_url),
       category: product.category,
       currentStock: stock,

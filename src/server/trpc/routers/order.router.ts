@@ -136,6 +136,8 @@ export const orderRouter = createTRPCRouter({
           veloxVariantId: null,
           productSku: 'DELIVERY-FEE',
           variantSku: null,
+          size: null,
+          color: null,
           productName: `Costo de Envío${shipping.isLocal ? ' Local' : ' Nacional'}${shipping.volumeSurcharge > 0 ? ' (+Volumen)' : ''}`,
           quantity: 1,
           unitPriceUsd: shipping.totalFee,
@@ -235,6 +237,8 @@ export const orderRouter = createTRPCRouter({
             quantity: item.quantity,
             unit_price_usd: item.unitPriceUsd,
             unit_price_bs: item.unitPriceBs,
+            size: item.size ?? undefined,
+            color: item.color ?? undefined,
           })),
           subtotal_usd: subtotalUsd,
           total_usd: totalUsd,
@@ -571,6 +575,8 @@ interface ResolvedOrderItem {
   productId: string;
   veloxVariantId: string | null;
   variantSku: string | null;
+  size: string | null;
+  color: string | null;
   productName: string;
   productSku: string;
   quantity: number;
@@ -642,6 +648,8 @@ async function resolveOrderItems(
       productId: product.veloxId,
       veloxVariantId: variant?.veloxVariantId ?? null,
       variantSku: variant?.sku ?? null,
+      size: variant?.size ?? item.size ?? null,
+      color: variant?.color ?? item.color ?? null,
       productName: product.name,
       productSku: product.sku,
       quantity: item.quantity,

@@ -204,7 +204,7 @@ export function CartDrawer() {
                         {/* Size & Color Badges */}
                         <div className="flex flex-wrap gap-1.5 mt-2.5">
                           <span className="inline-flex items-center bg-zinc-950 border border-white/5 text-[8px] font-black uppercase text-zinc-400 font-outfit tracking-wider rounded-none" style={{ padding: '2px 10px' }}>
-                            TALLA: <strong className="text-white font-mono ml-0.5">{item.size}</strong>
+                            TALLA: <strong className="text-white font-mono ml-0.5">{item.size ?? 'ÚNICA'}</strong>
                           </span>
                           
                           {item.color && (
