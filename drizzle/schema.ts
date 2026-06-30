@@ -1,26 +1,22 @@
+import { randomUUID } from "node:crypto";
 import { relations } from "drizzle-orm";
 import {
-  pgTable,
-  pgEnum,
-  uuid,
-  varchar,
+  sqliteTable,
   text,
-  boolean,
   integer,
-  decimal,
-  numeric,
-  timestamp,
-  jsonb,
   uniqueIndex,
   index,
-  date,
-} from "drizzle-orm/pg-core";
+} from "drizzle-orm/sqlite-core";
 
-// ─────────────────────────────────────────────────────────────
-// Postgres Enums
-// ─────────────────────────────────────────────────────────────
+const id = (name = "id") => text(name).primaryKey().$defaultFn(randomUUID);
+const uuidText = (name: string) => text(name);
+const timestamp = (name: string) =>
+  integer(name, { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date());
+const timestampNullable = (name: string) => integer(name, { mode: "timestamp_ms" });
+const json = <T>(name: string) => text(name, { mode: "json" }).$type<T>();
+const money = (name: string) => text(name);
 
-export const orderStatusEnum = pgEnum("order_status", [
+export const orderStatusValues = [
   "PENDING",
   "PAYMENT_UPLOADED",
   "PAYMENT_VERIFIED",
@@ -29,192 +25,128 @@ export const orderStatusEnum = pgEnum("order_status", [
   "DELIVERED",
   "CANCELLED",
   "REFUNDED",
-]);
+] as const;
 
-export const deliveryMethodEnum = pgEnum("delivery_method", [
+export const deliveryMethodValues = [
   "PICKUP",
   "DELIVERY",
   "MRW",
   "ZOOM",
   "TEALCA",
-]);
+] as const;
 
-export const paymentMethodEnum = pgEnum("payment_method", [
+export const paymentMethodValues = [
   "PAGO_MOVIL",
   "TRANSFER",
   "ZELLE",
   "CASH_USD",
   "CASH_BSS",
   "BINANCE",
-]);
+] as const;
 
-export const currencyEnum = pgEnum("currency", ["USD", "BSS"]);
+export const currencyValues = ["USD", "BSS"] as const;
+export const paymentStatusValues = ["PENDING", "VERIFIED", "REJECTED"] as const;
+export const exchangeRateSourceValues = ["BCV", "PARALLEL", "MANUAL"] as const;
 
-export const paymentStatusEnum = pgEnum("payment_status", [
-  "PENDING",
-  "VERIFIED",
-  "REJECTED",
-]);
-
-export const exchangeRateSourceEnum = pgEnum("exchange_rate_source", [
-  "BCV",
-  "PARALLEL",
-  "MANUAL",
-]);
-
-// ─────────────────────────────────────────────────────────────
-// Better Auth Tables
-// ─────────────────────────────────────────────────────────────
-
-export const users = pgTable(
+export const users = sqliteTable(
   "user",
   {
     id: text("id").primaryKey(),
     name: text("name").notNull(),
-    email: varchar("email", { length: 255 }).notNull(),
-    emailVerified: boolean("email_verified").default(false).notNull(),
+    email: text("email").notNull(),
+    emailVerified: integer("email_verified", { mode: "boolean" }).default(false).notNull(),
     image: text("image"),
-    role: varchar("role", { length: 50 }).default("customer").notNull(),
-    phone: varchar("phone", { length: 30 }),
-    cedula: varchar("cedula", { length: 20 }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .defaultNow()
-      .notNull()
-      .$onUpdate(() => new Date()),
+    role: text("role").default("customer").notNull(),
+    phone: text("phone"),
+    cedula: text("cedula"),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at").$onUpdate(() => new Date()),
   },
   (table) => [
     uniqueIndex("users_email_idx").on(table.email),
     index("users_role_idx").on(table.role),
-  ]
+  ],
 );
 
-export const sessions = pgTable(
+export const sessions = sqliteTable(
   "session",
   {
     id: text("id").primaryKey(),
-    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    expiresAt: timestamp("expires_at"),
     token: text("token").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .defaultNow()
-      .notNull()
-      .$onUpdate(() => new Date()),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at").$onUpdate(() => new Date()),
     ipAddress: text("ip_address"),
     userAgent: text("user_agent"),
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   },
-  (table) => [
-    uniqueIndex("sessions_token_idx").on(table.token),
-  ]
+  (table) => [uniqueIndex("sessions_token_idx").on(table.token)],
 );
 
-export const accounts = pgTable(
-  "account",
-  {
-    id: text("id").primaryKey(),
-    accountId: text("account_id").notNull(),
-    providerId: text("provider_id").notNull(),
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    accessToken: text("access_token"),
-    refreshToken: text("refresh_token"),
-    idToken: text("id_token"),
-    accessTokenExpiresAt: timestamp("access_token_expires_at", { withTimezone: true }),
-    refreshTokenExpiresAt: timestamp("refresh_token_expires_at", { withTimezone: true }),
-    scope: text("scope"),
-    password: text("password"),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .defaultNow()
-      .notNull()
-      .$onUpdate(() => new Date()),
-  }
-);
+export const accounts = sqliteTable("account", {
+  id: text("id").primaryKey(),
+  accountId: text("account_id").notNull(),
+  providerId: text("provider_id").notNull(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  accessToken: text("access_token"),
+  refreshToken: text("refresh_token"),
+  idToken: text("id_token"),
+  accessTokenExpiresAt: timestampNullable("access_token_expires_at"),
+  refreshTokenExpiresAt: timestampNullable("refresh_token_expires_at"),
+  scope: text("scope"),
+  password: text("password"),
+  createdAt: timestamp("created_at"),
+  updatedAt: timestamp("updated_at").$onUpdate(() => new Date()),
+});
 
-export const verifications = pgTable(
-  "verification",
-  {
-    id: text("id").primaryKey(),
-    identifier: text("identifier").notNull(),
-    value: text("value").notNull(),
-    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-  }
-);
+export const verifications = sqliteTable("verification", {
+  id: text("id").primaryKey(),
+  identifier: text("identifier").notNull(),
+  value: text("value").notNull(),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestampNullable("created_at").$defaultFn(() => new Date()),
+  updatedAt: timestampNullable("updated_at").$defaultFn(() => new Date()).$onUpdate(() => new Date()),
+});
 
-// ── Addresses ────────────────────────────────────────────────
-
-export const addresses = pgTable(
+export const addresses = sqliteTable(
   "addresses",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    customerId: text("customer_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    label: varchar("label", { length: 100 }).notNull(), // e.g. "Casa", "Oficina"
-    state: varchar("state", { length: 100 }).notNull(),
-    city: varchar("city", { length: 100 }).notNull(),
+    id: id(),
+    customerId: text("customer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    state: text("state").notNull(),
+    city: text("city").notNull(),
     addressLine: text("address_line").notNull(),
-    reference: text("reference"), // "frente al CC Sambil"
-    isDefault: boolean("is_default").default(false).notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .defaultNow()
-      .notNull()
-      .$onUpdate(() => new Date()),
+    reference: text("reference"),
+    isDefault: integer("is_default", { mode: "boolean" }).default(false).notNull(),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at").$onUpdate(() => new Date()),
   },
-  (table) => [
-    index("addresses_customer_id_idx").on(table.customerId),
-  ]
+  (table) => [index("addresses_customer_id_idx").on(table.customerId)],
 );
 
-// ── Product Cache (synced from Velox POS) ────────────────────
-
-export const productCache = pgTable(
+export const productCache = sqliteTable(
   "product_cache",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    veloxId: varchar("velox_id", { length: 100 }).notNull(),
-    name: varchar("name", { length: 500 }).notNull(),
-    slug: varchar("slug", { length: 500 }).notNull(),
-    sku: varchar("sku", { length: 100 }).notNull(),
-    barcode: varchar("barcode", { length: 100 }),
+    id: id(),
+    veloxId: text("velox_id").notNull(),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    sku: text("sku").notNull(),
+    barcode: text("barcode"),
     description: text("description"),
-    brand: varchar("brand", { length: 200 }),
-    category: varchar("category", { length: 200 }),
-    priceUsd: decimal("price_usd", { precision: 12, scale: 2 }).notNull(),
-    priceBs: decimal("price_bs", { precision: 16, scale: 2 }),
+    brand: text("brand"),
+    category: text("category"),
+    priceUsd: money("price_usd").notNull(),
+    priceBs: money("price_bs"),
     currentStock: integer("current_stock").default(0).notNull(),
-    isActive: boolean("is_active").default(true).notNull(),
-    isFeatured: boolean("is_featured").default(false).notNull(),
+    isActive: integer("is_active", { mode: "boolean" }).default(true).notNull(),
+    isFeatured: integer("is_featured", { mode: "boolean" }).default(false).notNull(),
     imageUrl: text("image_url"),
-    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
-    syncedAt: timestamp("synced_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .defaultNow()
-      .notNull()
-      .$onUpdate(() => new Date()),
+    metadata: json<Record<string, unknown>>("metadata"),
+    syncedAt: timestamp("synced_at"),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at").$onUpdate(() => new Date()),
   },
   (table) => [
     uniqueIndex("product_cache_velox_id_idx").on(table.veloxId),
@@ -225,117 +157,79 @@ export const productCache = pgTable(
     index("product_cache_brand_idx").on(table.brand),
     index("product_cache_is_active_idx").on(table.isActive),
     index("product_cache_is_featured_idx").on(table.isFeatured),
-  ]
+  ],
 );
 
-// ── Product Image Cache ──────────────────────────────────────
-
-export const productImageCache = pgTable(
+export const productImageCache = sqliteTable(
   "product_image_cache",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    productId: uuid("product_id")
-      .notNull()
-      .references(() => productCache.id, { onDelete: "cascade" }),
-    veloxImageId: uuid("velox_image_id"),
+    id: id(),
+    productId: uuidText("product_id").notNull().references(() => productCache.id, { onDelete: "cascade" }),
+    veloxImageId: uuidText("velox_image_id"),
     url: text("url").notNull(),
-    altText: varchar("alt_text", { length: 500 }),
+    altText: text("alt_text"),
     sortOrder: integer("sort_order").default(0).notNull(),
-    isPrimary: boolean("is_primary").default(false).notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
+    isPrimary: integer("is_primary", { mode: "boolean" }).default(false).notNull(),
+    createdAt: timestamp("created_at"),
   },
   (table) => [
     index("product_image_cache_product_id_idx").on(table.productId),
     index("product_image_cache_sort_order_idx").on(table.sortOrder),
-  ]
+  ],
 );
 
-// ── Product Variants (storefront v2) ─────────────────────────
-
-export const productVariants = pgTable(
+export const productVariants = sqliteTable(
   "product_variants",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    veloxVariantId: uuid("velox_variant_id").notNull().unique(),
-    productCacheId: uuid("product_cache_id")
-      .notNull()
-      .references(() => productCache.id, { onDelete: "cascade" }),
-    sku: varchar("sku", { length: 100 }),
-    size: varchar("size", { length: 50 }),
-    color: varchar("color", { length: 100 }),
-    colorHex: varchar("color_hex", { length: 7 }),
+    id: id(),
+    veloxVariantId: uuidText("velox_variant_id").notNull().unique(),
+    productCacheId: uuidText("product_cache_id").notNull().references(() => productCache.id, { onDelete: "cascade" }),
+    sku: text("sku"),
+    size: text("size"),
+    color: text("color"),
+    colorHex: text("color_hex"),
     imageUrl: text("image_url"),
-    additionalImages: jsonb("additional_images").$type<string[]>().default([]),
+    additionalImages: json<string[]>("additional_images").default([]),
     sortOrder: integer("sort_order").notNull().default(0),
-    priceUsdOverride: numeric("price_usd_override", { precision: 12, scale: 2 }),
-    priceBsOverride: numeric("price_bs_override", { precision: 18, scale: 2 }),
+    priceUsdOverride: money("price_usd_override"),
+    priceBsOverride: money("price_bs_override"),
     currentStock: integer("current_stock").notNull().default(0),
-    isActive: boolean("is_active").notNull().default(true),
-    syncedAt: timestamp("synced_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
+    isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    syncedAt: timestamp("synced_at"),
   },
   (table) => [
     index("product_variants_product_cache_id_idx").on(table.productCacheId),
-    uniqueIndex("product_variants_product_size_color_idx").on(
-      table.productCacheId,
-      table.size,
-      table.color,
-    ),
+    uniqueIndex("product_variants_product_size_color_idx").on(table.productCacheId, table.size, table.color),
     index("product_variants_is_active_idx").on(table.isActive),
-  ]
+  ],
 );
 
-// ── Orders ───────────────────────────────────────────────────
-
-export const orders = pgTable(
+export const orders = sqliteTable(
   "orders",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    orderNumber: varchar("order_number", { length: 30 }).notNull(),
-    customerId: text("customer_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "restrict" }),
-    status: orderStatusEnum("status").default("PENDING").notNull(),
-    subtotalUsd: decimal("subtotal_usd", { precision: 12, scale: 2 }).notNull(),
-    discountUsd: decimal("discount_usd", { precision: 12, scale: 2 })
-      .default("0")
-      .notNull(),
-    totalUsd: decimal("total_usd", { precision: 12, scale: 2 }).notNull(),
-    totalBss: decimal("total_bss", { precision: 16, scale: 2 }),
-    exchangeRateUsed: decimal("exchange_rate_used", {
-      precision: 12,
-      scale: 4,
-    }),
-    shippingAddressId: uuid("shipping_address_id").references(
-      () => addresses.id,
-      { onDelete: "set null" }
-    ),
-    deliveryMethod: deliveryMethodEnum("delivery_method")
-      .default("PICKUP")
-      .notNull(),
+    id: id(),
+    orderNumber: text("order_number").notNull(),
+    customerId: text("customer_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+    status: text("status", { enum: orderStatusValues }).default("PENDING").notNull(),
+    subtotalUsd: money("subtotal_usd").notNull(),
+    discountUsd: money("discount_usd").default("0").notNull(),
+    totalUsd: money("total_usd").notNull(),
+    totalBss: money("total_bss"),
+    exchangeRateUsed: money("exchange_rate_used"),
+    shippingAddressId: uuidText("shipping_address_id").references(() => addresses.id, { onDelete: "set null" }),
+    deliveryMethod: text("delivery_method", { enum: deliveryMethodValues }).default("PICKUP").notNull(),
     deliveryAddressText: text("delivery_address_text"),
-    deliveryLat: decimal("delivery_lat", { precision: 10, scale: 7 }),
-    deliveryLng: decimal("delivery_lng", { precision: 10, scale: 7 }),
+    deliveryLat: money("delivery_lat"),
+    deliveryLng: money("delivery_lng"),
     customerNotes: text("customer_notes"),
     adminNotes: text("admin_notes"),
-    lookbookId: uuid("lookbook_id").references(() => lookbooks.id, {
-      onDelete: "set null",
-    }),
-    lookbookSlug: varchar("lookbook_slug", { length: 300 }),
-    lookbookTitle: varchar("lookbook_title", { length: 300 }),
-    veloxSaleId: varchar("velox_sale_id", { length: 100 }),
-    /** Idempotency key propagated to Velox (webhook replay protection) */
+    lookbookId: uuidText("lookbook_id").references(() => lookbooks.id, { onDelete: "set null" }),
+    lookbookSlug: text("lookbook_slug"),
+    lookbookTitle: text("lookbook_title"),
+    veloxSaleId: text("velox_sale_id"),
     idempotencyKey: text("idempotency_key"),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .defaultNow()
-      .notNull()
-      .$onUpdate(() => new Date()),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at").$onUpdate(() => new Date()),
   },
   (table) => [
     uniqueIndex("orders_order_number_idx").on(table.orderNumber),
@@ -346,174 +240,124 @@ export const orders = pgTable(
     index("orders_velox_sale_id_idx").on(table.veloxSaleId),
     uniqueIndex("orders_idempotency_key_idx").on(table.idempotencyKey),
     index("orders_created_at_idx").on(table.createdAt),
-  ]
+  ],
 );
 
-// ── Order Items ──────────────────────────────────────────────
-
-export const orderItems = pgTable(
+export const orderItems = sqliteTable(
   "order_items",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    orderId: uuid("order_id")
-      .notNull()
-      .references(() => orders.id, { onDelete: "cascade" }),
-    veloxProductId: varchar("velox_product_id", { length: 100 }).notNull(),
-    variantId: uuid("variant_id"),
-    variantSku: varchar("variant_sku", { length: 100 }),
-    lookbookItemId: uuid("lookbook_item_id").references(() => lookbookItems.id, {
-      onDelete: "set null",
-    }),
-    lookbookRole: varchar("lookbook_role", { length: 100 }),
-    productName: varchar("product_name", { length: 500 }).notNull(),
-    productSku: varchar("product_sku", { length: 100 }).notNull(),
+    id: id(),
+    orderId: uuidText("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+    veloxProductId: text("velox_product_id").notNull(),
+    variantId: uuidText("variant_id"),
+    variantSku: text("variant_sku"),
+    lookbookItemId: uuidText("lookbook_item_id").references(() => lookbookItems.id, { onDelete: "set null" }),
+    lookbookRole: text("lookbook_role"),
+    productName: text("product_name").notNull(),
+    productSku: text("product_sku").notNull(),
     quantity: integer("quantity").notNull(),
-    unitPriceUsd: decimal("unit_price_usd", {
-      precision: 12,
-      scale: 2,
-    }).notNull(),
-    unitPriceBs: decimal("unit_price_bs", { precision: 16, scale: 2 }),
-    totalUsd: decimal("total_usd", { precision: 12, scale: 2 }).notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
+    unitPriceUsd: money("unit_price_usd").notNull(),
+    unitPriceBs: money("unit_price_bs"),
+    totalUsd: money("total_usd").notNull(),
+    createdAt: timestamp("created_at"),
   },
   (table) => [
     index("order_items_order_id_idx").on(table.orderId),
     index("order_items_velox_product_id_idx").on(table.veloxProductId),
     index("order_items_variant_id_idx").on(table.variantId),
     index("order_items_lookbook_item_id_idx").on(table.lookbookItemId),
-  ]
+  ],
 );
 
-// ── Payments ─────────────────────────────────────────────────
-
-export const payments = pgTable(
+export const payments = sqliteTable(
   "payments",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    orderId: uuid("order_id")
-      .notNull()
-      .references(() => orders.id, { onDelete: "cascade" }),
-    method: paymentMethodEnum("method").notNull(),
-    amount: decimal("amount", { precision: 16, scale: 2 }).notNull(),
-    currency: currencyEnum("currency").notNull(),
-    referenceNumber: varchar("reference_number", { length: 100 }),
-    bank: varchar("bank", { length: 100 }),
-    phoneLast4: varchar("phone_last4", { length: 4 }),
-    status: paymentStatusEnum("status").default("PENDING").notNull(),
+    id: id(),
+    orderId: uuidText("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+    method: text("method", { enum: paymentMethodValues }).notNull(),
+    amount: money("amount").notNull(),
+    currency: text("currency", { enum: currencyValues }).notNull(),
+    referenceNumber: text("reference_number"),
+    bank: text("bank"),
+    phoneLast4: text("phone_last4"),
+    status: text("status", { enum: paymentStatusValues }).default("PENDING").notNull(),
     proofImageUrl: text("proof_image_url"),
     rejectionReason: text("rejection_reason"),
-    verifiedBy: text("verified_by").references(() => users.id, {
-      onDelete: "set null",
-    }),
-    verifiedAt: timestamp("verified_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .defaultNow()
-      .notNull()
-      .$onUpdate(() => new Date()),
+    verifiedBy: text("verified_by").references(() => users.id, { onDelete: "set null" }),
+    verifiedAt: timestampNullable("verified_at"),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at").$onUpdate(() => new Date()),
   },
   (table) => [
     index("payments_order_id_idx").on(table.orderId),
     index("payments_status_idx").on(table.status),
     index("payments_reference_number_idx").on(table.referenceNumber),
     index("payments_method_idx").on(table.method),
-  ]
+  ],
 );
 
-// ── Order Status History ─────────────────────────────────────
-
-export const orderStatusHistory = pgTable(
+export const orderStatusHistory = sqliteTable(
   "order_status_history",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    orderId: uuid("order_id")
-      .notNull()
-      .references(() => orders.id, { onDelete: "cascade" }),
-    status: orderStatusEnum("status").notNull(),
+    id: id(),
+    orderId: uuidText("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+    status: text("status", { enum: orderStatusValues }).notNull(),
     notes: text("notes"),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
+    createdAt: timestamp("created_at"),
   },
   (table) => [
     index("order_status_history_order_id_idx").on(table.orderId),
     index("order_status_history_created_at_idx").on(table.createdAt),
-  ]
+  ],
 );
 
-// ── Orders Sync (storefront v2) ───────────────────────────────
-
-export const ordersSync = pgTable("orders_sync", {
-  orderId: uuid("order_id")
-    .primaryKey()
-    .references(() => orders.id, { onDelete: "cascade" }),
-  veloxWebOrderId: uuid("velox_web_order_id"),
-  veloxSaleId: uuid("velox_sale_id"),
-  lastSyncAttemptAt: timestamp("last_sync_attempt_at", { withTimezone: true }),
+export const ordersSync = sqliteTable("orders_sync", {
+  orderId: uuidText("order_id").primaryKey().references(() => orders.id, { onDelete: "cascade" }),
+  veloxWebOrderId: uuidText("velox_web_order_id"),
+  veloxSaleId: uuidText("velox_sale_id"),
+  lastSyncAttemptAt: timestampNullable("last_sync_attempt_at"),
   lastSyncError: text("last_sync_error"),
-  syncStatus: varchar("sync_status", { length: 20 })
-    .notNull()
-    .default("pending"),
+  syncStatus: text("sync_status").notNull().default("pending"),
 });
 
-// ── Outbox (storefront v2) ────────────────────────────────────
-
-export const outbox = pgTable(
+export const outbox = sqliteTable(
   "outbox",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    type: varchar("type", { length: 50 }).notNull(),
-    aggregateId: uuid("aggregate_id").notNull(),
-    payload: jsonb("payload").notNull(),
+    id: id(),
+    type: text("type").notNull(),
+    aggregateId: uuidText("aggregate_id").notNull(),
+    payload: json<unknown>("payload").notNull(),
     idempotencyKey: text("idempotency_key").notNull(),
-    status: varchar("status", { length: 20 }).notNull().default("pending"),
+    status: text("status").notNull().default("pending"),
     attempts: integer("attempts").notNull().default(0),
     maxAttempts: integer("max_attempts").notNull().default(10),
-    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    nextAttemptAt: timestamp("next_attempt_at"),
+    lockedAt: timestampNullable("locked_at"),
     lockedBy: text("locked_by"),
     lastError: text("last_error"),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .defaultNow()
-      .notNull()
-      .$onUpdate(() => new Date()),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at").$onUpdate(() => new Date()),
   },
   (table) => [
-    index("outbox_status_next_attempt_idx").on(
-      table.status,
-      table.nextAttemptAt,
-    ),
+    index("outbox_status_next_attempt_idx").on(table.status, table.nextAttemptAt),
     index("outbox_aggregate_id_idx").on(table.aggregateId),
     uniqueIndex("outbox_idempotency_key_idx").on(table.idempotencyKey),
   ],
 );
 
-// ── Webhook Deliveries (storefront v2 dedup) ──────────────────
-
-export const webhookDeliveries = pgTable(
+export const webhookDeliveries = sqliteTable(
   "webhook_deliveries",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: id(),
     eventId: text("event_id").notNull().unique(),
-    eventType: varchar("event_type", { length: 50 }).notNull(),
-    source: varchar("source", { length: 50 }).notNull(),
-    payload: jsonb("payload").notNull(),
+    eventType: text("event_type").notNull(),
+    source: text("source").notNull(),
+    payload: json<unknown>("payload").notNull(),
     signature: text("signature").notNull(),
-    processedAt: timestamp("processed_at", { withTimezone: true }),
-    result: varchar("result", { length: 20 }),
+    processedAt: timestampNullable("processed_at"),
+    result: text("result"),
     error: text("error"),
-    receivedAt: timestamp("received_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
+    receivedAt: timestamp("received_at"),
   },
   (table) => [
     index("webhook_deliveries_event_type_idx").on(table.eventType),
@@ -521,110 +365,75 @@ export const webhookDeliveries = pgTable(
   ],
 );
 
-// ── Exchange Rates ───────────────────────────────────────────
-
-export const exchangeRates = pgTable(
+export const exchangeRates = sqliteTable(
   "exchange_rates",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    rateBssPerUsd: decimal("rate_bss_per_usd", {
-      precision: 12,
-      scale: 4,
-    }).notNull(),
-    source: exchangeRateSourceEnum("source").notNull(),
-    isActive: boolean("is_active").default(true).notNull(),
-    effectiveDate: date("effective_date").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
+    id: id(),
+    rateBssPerUsd: money("rate_bss_per_usd").notNull(),
+    source: text("source", { enum: exchangeRateSourceValues }).notNull(),
+    isActive: integer("is_active", { mode: "boolean" }).default(true).notNull(),
+    effectiveDate: text("effective_date").notNull(),
+    createdAt: timestamp("created_at"),
   },
   (table) => [
     index("exchange_rates_is_active_idx").on(table.isActive),
     index("exchange_rates_effective_date_idx").on(table.effectiveDate),
     index("exchange_rates_source_idx").on(table.source),
-  ]
+  ],
 );
 
-// ── Lookbooks ────────────────────────────────────────────────
-
-export const lookbooks = pgTable(
+export const lookbooks = sqliteTable(
   "lookbooks",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    title: varchar("title", { length: 300 }).notNull(),
-    slug: varchar("slug", { length: 300 }).notNull(),
+    id: id(),
+    title: text("title").notNull(),
+    slug: text("slug").notNull(),
     description: text("description"),
-    season: varchar("season", { length: 100 }),
-    isPublished: boolean("is_published").default(false).notNull(),
+    season: text("season"),
+    isPublished: integer("is_published", { mode: "boolean" }).default(false).notNull(),
     sortOrder: integer("sort_order").default(0).notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .defaultNow()
-      .notNull()
-      .$onUpdate(() => new Date()),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at").$onUpdate(() => new Date()),
   },
   (table) => [
     uniqueIndex("lookbooks_slug_idx").on(table.slug),
     index("lookbooks_is_published_idx").on(table.isPublished),
     index("lookbooks_sort_order_idx").on(table.sortOrder),
-  ]
+  ],
 );
 
-// ── Lookbook Images ──────────────────────────────────────────
-
-export const lookbookImages = pgTable(
+export const lookbookImages = sqliteTable(
   "lookbook_images",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    lookbookId: uuid("lookbook_id")
-      .notNull()
-      .references(() => lookbooks.id, { onDelete: "cascade" }),
+    id: id(),
+    lookbookId: uuidText("lookbook_id").notNull().references(() => lookbooks.id, { onDelete: "cascade" }),
     imageUrl: text("image_url").notNull(),
     caption: text("caption"),
     sortOrder: integer("sort_order").default(0).notNull(),
-    taggedProducts: jsonb("tagged_products").$type<
-      Array<{ productId: string; x: number; y: number; label?: string }>
-    >(),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
+    taggedProducts: json<Array<{ productId: string; x: number; y: number; label?: string }>>("tagged_products"),
+    createdAt: timestamp("created_at"),
   },
   (table) => [
     index("lookbook_images_lookbook_id_idx").on(table.lookbookId),
     index("lookbook_images_sort_order_idx").on(table.sortOrder),
-  ]
+  ],
 );
 
-// ── Lookbook Sellable Recipe Items ───────────────────────────
-
-export const lookbookItems = pgTable(
+export const lookbookItems = sqliteTable(
   "lookbook_items",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    lookbookId: uuid("lookbook_id")
-      .notNull()
-      .references(() => lookbooks.id, { onDelete: "cascade" }),
-    productCacheId: uuid("product_cache_id")
-      .notNull()
-      .references(() => productCache.id, { onDelete: "restrict" }),
-    variantId: uuid("variant_id").references(() => productVariants.id, {
-      onDelete: "set null",
-    }),
-    role: varchar("role", { length: 100 }).default("piece").notNull(),
-    label: varchar("label", { length: 200 }),
-    isRequired: boolean("is_required").default(true).notNull(),
+    id: id(),
+    lookbookId: uuidText("lookbook_id").notNull().references(() => lookbooks.id, { onDelete: "cascade" }),
+    productCacheId: uuidText("product_cache_id").notNull().references(() => productCache.id, { onDelete: "restrict" }),
+    variantId: uuidText("variant_id").references(() => productVariants.id, { onDelete: "set null" }),
+    role: text("role").default("piece").notNull(),
+    label: text("label"),
+    isRequired: integer("is_required", { mode: "boolean" }).default(true).notNull(),
     minQuantity: integer("min_quantity").default(1).notNull(),
     maxQuantity: integer("max_quantity").default(1).notNull(),
     sortOrder: integer("sort_order").default(0).notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .defaultNow()
-      .notNull()
-      .$onUpdate(() => new Date()),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at").$onUpdate(() => new Date()),
   },
   (table) => [
     index("lookbook_items_lookbook_id_idx").on(table.lookbookId),
@@ -634,29 +443,18 @@ export const lookbookItems = pgTable(
   ],
 );
 
-// ── Site Config (key-value) ──────────────────────────────────
-
-export const siteConfig = pgTable(
+export const siteConfig = sqliteTable(
   "site_config",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    key: varchar("key", { length: 255 }).notNull(),
-    value: jsonb("value").notNull(),
+    id: id(),
+    key: text("key").notNull(),
+    value: json<unknown>("value").notNull(),
     description: text("description"),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .defaultNow()
-      .notNull()
-      .$onUpdate(() => new Date()),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at").$onUpdate(() => new Date()),
   },
-  (table) => [uniqueIndex("site_config_key_idx").on(table.key)]
+  (table) => [uniqueIndex("site_config_key_idx").on(table.key)],
 );
-
-// ─────────────────────────────────────────────────────────────
-// Relations
-// ─────────────────────────────────────────────────────────────
 
 export const usersRelations = relations(users, ({ many }) => ({
   addresses: many(addresses),
@@ -665,10 +463,7 @@ export const usersRelations = relations(users, ({ many }) => ({
 }));
 
 export const addressesRelations = relations(addresses, ({ one }) => ({
-  user: one(users, {
-    fields: [addresses.customerId],
-    references: [users.id],
-  }),
+  user: one(users, { fields: [addresses.customerId], references: [users.id] }),
 }));
 
 export const productCacheRelations = relations(productCache, ({ many }) => ({
@@ -677,118 +472,55 @@ export const productCacheRelations = relations(productCache, ({ many }) => ({
   lookbookItems: many(lookbookItems),
 }));
 
-export const productVariantsRelations = relations(
-  productVariants,
-  ({ one, many }) => ({
-    product: one(productCache, {
-      fields: [productVariants.productCacheId],
-      references: [productCache.id],
-    }),
-    lookbookItems: many(lookbookItems),
-  }),
-);
+export const productVariantsRelations = relations(productVariants, ({ one, many }) => ({
+  product: one(productCache, { fields: [productVariants.productCacheId], references: [productCache.id] }),
+  lookbookItems: many(lookbookItems),
+}));
 
-export const productImageCacheRelations = relations(
-  productImageCache,
-  ({ one }) => ({
-    product: one(productCache, {
-      fields: [productImageCache.productId],
-      references: [productCache.id],
-    }),
-  })
-);
+export const productImageCacheRelations = relations(productImageCache, ({ one }) => ({
+  product: one(productCache, { fields: [productImageCache.productId], references: [productCache.id] }),
+}));
 
 export const ordersRelations = relations(orders, ({ one, many }) => ({
-  user: one(users, {
-    fields: [orders.customerId],
-    references: [users.id],
-  }),
-  shippingAddress: one(addresses, {
-    fields: [orders.shippingAddressId],
-    references: [addresses.id],
-  }),
+  user: one(users, { fields: [orders.customerId], references: [users.id] }),
+  shippingAddress: one(addresses, { fields: [orders.shippingAddressId], references: [addresses.id] }),
   items: many(orderItems),
   payments: many(payments),
   statusHistory: many(orderStatusHistory),
-  sync: one(ordersSync, {
-    fields: [orders.id],
-    references: [ordersSync.orderId],
-  }),
-  lookbook: one(lookbooks, {
-    fields: [orders.lookbookId],
-    references: [lookbooks.id],
-  }),
+  sync: one(ordersSync, { fields: [orders.id], references: [ordersSync.orderId] }),
+  lookbook: one(lookbooks, { fields: [orders.lookbookId], references: [lookbooks.id] }),
 }));
 
 export const ordersSyncRelations = relations(ordersSync, ({ one }) => ({
-  order: one(orders, {
-    fields: [ordersSync.orderId],
-    references: [orders.id],
-  }),
+  order: one(orders, { fields: [ordersSync.orderId], references: [orders.id] }),
 }));
 
 export const orderItemsRelations = relations(orderItems, ({ one }) => ({
-  order: one(orders, {
-    fields: [orderItems.orderId],
-    references: [orders.id],
-  }),
-  lookbookItem: one(lookbookItems, {
-    fields: [orderItems.lookbookItemId],
-    references: [lookbookItems.id],
-  }),
+  order: one(orders, { fields: [orderItems.orderId], references: [orders.id] }),
+  lookbookItem: one(lookbookItems, { fields: [orderItems.lookbookItemId], references: [lookbookItems.id] }),
 }));
 
 export const paymentsRelations = relations(payments, ({ one }) => ({
-  order: one(orders, {
-    fields: [payments.orderId],
-    references: [orders.id],
-  }),
-  verifier: one(users, {
-    fields: [payments.verifiedBy],
-    references: [users.id],
-  }),
+  order: one(orders, { fields: [payments.orderId], references: [orders.id] }),
+  verifier: one(users, { fields: [payments.verifiedBy], references: [users.id] }),
 }));
 
-export const orderStatusHistoryRelations = relations(
-  orderStatusHistory,
-  ({ one }) => ({
-    order: one(orders, {
-      fields: [orderStatusHistory.orderId],
-      references: [orders.id],
-    }),
-  })
-);
+export const orderStatusHistoryRelations = relations(orderStatusHistory, ({ one }) => ({
+  order: one(orders, { fields: [orderStatusHistory.orderId], references: [orders.id] }),
+}));
 
 export const lookbooksRelations = relations(lookbooks, ({ many }) => ({
   images: many(lookbookImages),
   items: many(lookbookItems),
 }));
 
-export const lookbookImagesRelations = relations(
-  lookbookImages,
-  ({ one }) => ({
-    lookbook: one(lookbooks, {
-      fields: [lookbookImages.lookbookId],
-      references: [lookbooks.id],
-    }),
-  })
-);
+export const lookbookImagesRelations = relations(lookbookImages, ({ one }) => ({
+  lookbook: one(lookbooks, { fields: [lookbookImages.lookbookId], references: [lookbooks.id] }),
+}));
 
-export const lookbookItemsRelations = relations(
-  lookbookItems,
-  ({ one, many }) => ({
-    lookbook: one(lookbooks, {
-      fields: [lookbookItems.lookbookId],
-      references: [lookbooks.id],
-    }),
-    product: one(productCache, {
-      fields: [lookbookItems.productCacheId],
-      references: [productCache.id],
-    }),
-    variant: one(productVariants, {
-      fields: [lookbookItems.variantId],
-      references: [productVariants.id],
-    }),
-    orderItems: many(orderItems),
-  }),
-);
+export const lookbookItemsRelations = relations(lookbookItems, ({ one, many }) => ({
+  lookbook: one(lookbooks, { fields: [lookbookItems.lookbookId], references: [lookbooks.id] }),
+  product: one(productCache, { fields: [lookbookItems.productCacheId], references: [productCache.id] }),
+  variant: one(productVariants, { fields: [lookbookItems.variantId], references: [productVariants.id] }),
+  orderItems: many(orderItems),
+}));

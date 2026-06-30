@@ -23,12 +23,15 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
+    "@libsql/client": "^0.17.4",
     "@react-pdf/renderer": "^4.5.1",
     "@tanstack/react-query": "^5.100.14",
     "@trpc/client": "^11.17.0",
     "@trpc/server": "^11.17.0",
     "@trpc/tanstack-react-query": "^11.17.0",
     "@types/leaflet": "^1.9.21",
+    "@yoeldevsoft25/store-contracts": "file:./libs/store-contracts",
+    "@yoeldevsoft25/storefront-sdk": "file:./libs/storefront-sdk",
     "better-auth": "^1.6.11",
     "client-only": "^0.0.1",
     "clsx": "^2.1.1",
@@ -46,9 +49,7 @@
     "sharp": "^0.34.5",
     "superjson": "^2.2.6",
     "zod": "^4.4.3",
-    "zustand": "^5.0.13",
-    "@yoeldevsoft25/storefront-sdk": "file:./libs/storefront-sdk",
-    "@yoeldevsoft25/store-contracts": "file:./libs/store-contracts"
+    "zustand": "^5.0.13"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

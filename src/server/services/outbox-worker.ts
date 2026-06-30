@@ -1,5 +1,5 @@
 import 'server-only';
-import { and, eq, lt, lte, sql } from 'drizzle-orm';
+import { and, eq, lt, lte } from 'drizzle-orm';
 import { StorefrontApiError } from '@yoeldevsoft25/storefront-sdk';
 import { db } from '@/server/db';
 import * as schema from '@/../drizzle/schema';
@@ -83,9 +83,9 @@ export function computeBackoffMinutes(attempts: number): number {
 
 export class OutboxWorker {
   /**
-   * Process up to `BATCH_SIZE` pending outbox events. Uses `FOR UPDATE
-   * SKIP LOCKED` so multiple workers can run in parallel without
-   * stepping on each other.
+   * Process up to `BATCH_SIZE` pending outbox events. Turso/libSQL does not
+   * support PostgreSQL's `FOR UPDATE SKIP LOCKED`, so rows are claimed by
+   * moving them to `in_flight` inside one transaction.
    */
   async processPending(): Promise<OutboxProcessResult> {
     const result: OutboxProcessResult = { processed: 0, failed: 0, skipped: 0 };
@@ -163,8 +163,7 @@ export class OutboxWorker {
           ),
         )
         .orderBy(schema.outbox.nextAttemptAt)
-        .limit(BATCH_SIZE)
-        .for('update', { skipLocked: true });
+        .limit(BATCH_SIZE);
 
       for (const row of rows) {
         await tx
@@ -217,8 +216,7 @@ export class OutboxWorker {
           ),
         )
         .orderBy(schema.outbox.createdAt)
-        .limit(BATCH_SIZE)
-        .for('update', { skipLocked: true });
+        .limit(BATCH_SIZE);
 
       for (const row of rows) {
         await tx
@@ -444,6 +442,3 @@ export async function flushOutboxBestEffort(
 }
 
 export default OutboxWorker;
-
-// Avoid unused import warnings
-void sql;

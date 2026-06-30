@@ -9,7 +9,7 @@ Tienda online Next.js conectada a Velox POS para catalogo, stock y registro de v
 - Tailwind CSS 4
 - tRPC 11 + TanStack Query
 - Better Auth
-- Drizzle ORM + PostgreSQL 17
+- Drizzle ORM + Turso/libSQL
 - Docker Compose: Postgres en `5435`, Redis en `6380`
 
 ## Variables locales
@@ -17,7 +17,8 @@ Tienda online Next.js conectada a Velox POS para catalogo, stock y registro de v
 Copiar `.env.example` a `.env.local` y completar los secretos reales:
 
 ```env
-DATABASE_URL=postgresql://clazico:clazico_secret@localhost:5435/clazico_store
+TURSO_DATABASE_URL=libsql://your-database.turso.io
+TURSO_AUTH_TOKEN=replace-with-turso-token
 REDIS_URL=redis://localhost:6380
 
 BETTER_AUTH_SECRET=replace-with-32-plus-random-chars
@@ -41,7 +42,6 @@ entorno y `CRON_SECRET` debe ser aleatorio.
 
 ```bash
 npm install
-docker compose up -d
 npm run db:push
 npm run db:seed
 npm run dev

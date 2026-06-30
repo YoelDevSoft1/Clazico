@@ -39,10 +39,10 @@ export const productRouter = createTRPCRouter({
         conditions.push(eq(schema.productCache.category, category));
       }
       if (minPrice !== undefined) {
-        conditions.push(sql`CAST(${schema.productCache.priceUsd} AS DECIMAL) >= ${minPrice}`);
+        conditions.push(sql`CAST(${schema.productCache.priceUsd} AS REAL) >= ${minPrice}`);
       }
       if (maxPrice !== undefined) {
-        conditions.push(sql`CAST(${schema.productCache.priceUsd} AS DECIMAL) <= ${maxPrice}`);
+        conditions.push(sql`CAST(${schema.productCache.priceUsd} AS REAL) <= ${maxPrice}`);
       }
       if (inStock) {
         conditions.push(sql`${schema.productCache.currentStock} > 0`);

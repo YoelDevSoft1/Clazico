@@ -33,9 +33,8 @@ export async function GET(req: Request) {
 
   try {
     const { outboxWorker } = await import('@/server/services/outbox-worker');
-    // Run up to BATCH_SIZE batches sequentially. The worker uses
-    // FOR UPDATE SKIP LOCKED internally, so it is safe to also run
-    // it from the webhook handler or admin tool in parallel.
+    // Run up to BATCH_SIZE batches sequentially. The worker claims rows
+    // inside a transaction before sending them to Velox.
     const total: { processed: number; failed: number; skipped: number } = { processed: 0, failed: 0, skipped: 0 };
     for (let i = 0; i < BATCH_SIZE; i++) {
       const result = await outboxWorker.processPending();

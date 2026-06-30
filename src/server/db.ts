@@ -1,5 +1,5 @@
-import { Pool } from "pg";
-import { drizzle } from "drizzle-orm/node-postgres";
+import { createClient } from "@libsql/client";
+import { drizzle } from "drizzle-orm/libsql";
 import * as schema from "@/../drizzle/schema";
 
 /**
@@ -14,23 +14,20 @@ const globalForDb = globalThis as unknown as {
 };
 
 function createDb() {
-  const databaseUrl = process.env.DATABASE_URL;
+  const databaseUrl = process.env.TURSO_DATABASE_URL;
+  const authToken = process.env.TURSO_AUTH_TOKEN;
   if (!databaseUrl) {
     throw new Error(
-      "DATABASE_URL is not set. Please check your environment variables."
+      "TURSO_DATABASE_URL is not set. Please check your environment variables."
     );
   }
 
-  const pool = new Pool({
-    connectionString: databaseUrl,
+  const client = createClient({
+    url: databaseUrl,
+    authToken,
   });
 
-  // Prevent unexpected errors on idle clients from crashing the entire Node process
-  pool.on("error", (err) => {
-    console.error("Unexpected error on idle database client", err);
-  });
-
-  return drizzle(pool, {
+  return drizzle(client, {
     schema,
     logger: process.env.NODE_ENV === "development",
   });
@@ -43,4 +40,3 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 export type Database = typeof db;
-

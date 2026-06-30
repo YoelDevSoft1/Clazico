@@ -1,6 +1,7 @@
 import "dotenv/config";
 import dotenv from "dotenv";
-import { drizzle } from "drizzle-orm/node-postgres";
+import { createClient } from "@libsql/client";
+import { drizzle } from "drizzle-orm/libsql";
 import { users, accounts, exchangeRates, siteConfig } from "./schema";
 
 dotenv.config({ path: ".env.local" });
@@ -13,12 +14,15 @@ dotenv.config({ path: ".env.local" });
  */
 
 async function main() {
-  const databaseUrl = process.env.DATABASE_URL;
+  const databaseUrl = process.env.TURSO_DATABASE_URL;
   if (!databaseUrl) {
-    throw new Error("DATABASE_URL is not set");
+    throw new Error("TURSO_DATABASE_URL is not set");
   }
 
-  const db = drizzle(databaseUrl);
+  const db = drizzle(createClient({
+    url: databaseUrl,
+    authToken: process.env.TURSO_AUTH_TOKEN,
+  }));
 
   console.log("🌱 Seeding database…\n");
 

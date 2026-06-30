@@ -31,7 +31,7 @@ export const adminRouter = createTRPCRouter({
     // Revenue this month (USD)
     const [monthlyRevenue] = await ctx.db
       .select({
-        total: sql<string>`COALESCE(SUM(CAST(${schema.orders.totalUsd} AS DECIMAL)), 0)`,
+        total: sql<string>`COALESCE(SUM(CAST(${schema.orders.totalUsd} AS REAL)), 0)`,
       })
       .from(schema.orders)
       .where(

@@ -23,7 +23,7 @@ class OrderNumberService {
 
   /**
    * Generate the next order number for the current year.
-   * Uses a SELECT ... FOR UPDATE style query to safely increment.
+   * Reads the latest order for the year and increments it.
    */
   async generate(): Promise<string> {
     const year = new Date().getFullYear();

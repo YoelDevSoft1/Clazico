@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────
-// Enums — these mirror the pgEnum definitions in drizzle/schema.ts
+// Enums — these mirror the database enum values in drizzle/schema.ts
 // ─────────────────────────────────────────────────────────────
 
 /** Order lifecycle status */
