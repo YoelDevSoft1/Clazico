@@ -3,19 +3,75 @@
   "short_name": "Clazico",
   "description": "Tienda exclusiva de zapatos y ropa — Clazico Exclusive Shop",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "browser"],
   "background_color": "#0A0A0A",
   "theme_color": "#E31E24",
   "orientation": "portrait-primary",
-  "scope": "/",
   "lang": "es-VE",
+  "dir": "ltr",
   "categories": ["shopping", "fashion", "lifestyle"],
   "icons": [
     {
-      "src": "/logos/logo.png",
-      "sizes": "any",
+      "src": "/icons/icon-72x72.png",
+      "sizes": "72x72",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-96x96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-128x128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-144x144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-152x152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-167x167.png",
+      "sizes": "167x167",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-384x384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable-icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "screenshots": [],
@@ -25,14 +81,18 @@
       "short_name": "Catálogo",
       "description": "Ver todos los productos",
       "url": "/catalog",
-      "icons": [{ "src": "/logos/logo.png", "sizes": "any" }]
+      "icons": [
+        { "src": "/icons/icon-192x192.png", "sizes": "192x192", "type": "image/png" }
+      ]
     },
     {
       "name": "Mis Pedidos",
       "short_name": "Pedidos",
       "description": "Ver el estado de mis pedidos",
       "url": "/orders",
-      "icons": [{ "src": "/logos/logo.png", "sizes": "any" }]
+      "icons": [
+        { "src": "/icons/icon-192x192.png", "sizes": "192x192", "type": "image/png" }
+      ]
     }
   ]
 }

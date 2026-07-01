@@ -57,10 +57,11 @@ export const metadata: Metadata = {
     process.env.NEXT_PUBLIC_APP_URL || "https://clazicostore.com"
   ),
   manifest: "/manifest.json",
+  applicationName: "Clazico Store",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Clazico",
+    title: "Clazico Store",
   },
   formatDetection: {
     telephone: true,
@@ -90,12 +91,21 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: "/clazico.ico", sizes: "any" },
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icons/icon-72x72.png", sizes: "72x72", type: "image/png" },
+      { url: "/icons/icon-96x96.png", sizes: "96x96", type: "image/png" },
+      { url: "/icons/icon-128x128.png", sizes: "128x128", type: "image/png" },
+      { url: "/icons/icon-144x144.png", sizes: "144x144", type: "image/png" },
+      { url: "/icons/icon-152x152.png", sizes: "152x152", type: "image/png" },
+      { url: "/icons/icon-167x167.png", sizes: "167x167", type: "image/png" },
       { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-384x384.png", sizes: "384x384", type: "image/png" },
       { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
     ],
     apple: [
+      { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
       { url: "/icons/icon-152x152.png", sizes: "152x152", type: "image/png" },
+      { url: "/icons/icon-167x167.png", sizes: "167x167", type: "image/png" },
     ],
   },
 };
@@ -120,11 +130,36 @@ export default function RootLayout({
           href="https://fonts.gstatic.com"
           crossOrigin="anonymous"
         />
+        {/* PWA — explicit links for browsers that ignore metadata.icons */}
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-96x96.png" />
+        <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192x192.png" />
+        <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512x512.png" />
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" sizes="180x180" />
+        <link
+          rel="apple-touch-icon"
+          href="/icons/icon-152x152.png"
+          sizes="152x152"
+        />
+        <link
+          rel="apple-touch-icon"
+          href="/icons/icon-167x167.png"
+          sizes="167x167"
+        />
         <meta name="mobile-web-app-capable" content="yes" />
+        <meta
+          name="apple-mobile-web-app-capable"
+          content="yes"
+        />
+        <meta name="apple-mobile-web-app-title" content="Clazico Store" />
         <meta
           name="apple-mobile-web-app-status-bar-style"
           content="black-translucent"
         />
+        <meta name="application-name" content="Clazico Store" />
+        <meta name="theme-color" content="#E31E24" />
+        <meta name="msapplication-TileColor" content="#E31E24" />
+        <meta name="msapplication-TileImage" content="/icons/icon-144x144.png" />
       </head>
       <body className="min-h-dvh flex flex-col font-[family-name:var(--font-inter)] antialiased">
         <Providers>
