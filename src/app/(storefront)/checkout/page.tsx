@@ -19,7 +19,7 @@ type CreatedOrder = {
   totalBss: number;
 };
 
-type PaymentMethod = 'pago_movil' | 'transferencia' | 'zelle' | 'efectivo_usd';
+type PaymentMethod = 'pago_movil' | 'binance' | 'zinli' | 'wally' | 'zelle' | 'efectivo_usd';
 type DeliveryMethod = 'PICKUP' | 'DELIVERY';
 type CartItem = ReturnType<typeof useCartStore.getState>['items'][number];
 type SessionCheckoutUser = {
@@ -31,7 +31,9 @@ type SessionCheckoutUser = {
 
 const paymentLabels: Record<PaymentMethod, string> = {
   pago_movil: 'Pago Móvil',
-  transferencia: 'Transferencia',
+  binance: 'Binance',
+  zinli: 'Zinli',
+  wally: 'Wally',
   zelle: 'Zelle',
   efectivo_usd: 'Efectivo USD',
 };
@@ -92,7 +94,7 @@ export default function CheckoutPage() {
 
   const rate = subtotalUsd > 0 ? subtotalBs / subtotalUsd : 36.715;
   const finalTotalBs = finalTotalUsd * rate;
-  const isUsdPayment = paymentMethod === 'zelle' || paymentMethod === 'efectivo_usd';
+  const isUsdPayment = paymentMethod !== 'pago_movil';
   const customerName = name ?? sessionUser?.name ?? '';
   const customerEmail = email ?? sessionUser?.email ?? '';
   const customerPhone = phone ?? sessionUser?.phone ?? '';
@@ -153,7 +155,6 @@ export default function CheckoutPage() {
       });
 
       if (paymentMethod !== 'efectivo_usd') {
-        const selectedBank = VENEZUELAN_BANKS.find((bank) => bank.code === originBank);
         await submitPaymentMutation.mutateAsync({
           orderId: order.id,
           method: paymentMethod,
@@ -161,7 +162,7 @@ export default function CheckoutPage() {
           amountUsd: finalTotalUsd,
           amountBs: finalTotalBs,
           exchangeRate: rate,
-          bankName: selectedBank?.name ?? 'Zelle',
+          bankName: getPaymentProcessorName(paymentMethod, originBank),
           accountLastFour: accountLastFour || '0000',
           proofImageUrl: 'https://images.veloxpos.com/mock-receipt.jpg',
         });
@@ -346,7 +347,7 @@ export default function CheckoutPage() {
             </CheckoutSection>
 
             <CheckoutSection title="3. Registro de Pago">
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {(Object.keys(paymentLabels) as PaymentMethod[]).map((method) => (
                   <button
                     key={method}
@@ -414,6 +415,15 @@ function toWhatsappPhone(phone: string): string {
   if (digits.startsWith('0')) return `58${digits.slice(1)}`;
   if (digits.startsWith('58')) return digits;
   return digits;
+}
+
+function getPaymentProcessorName(paymentMethod: PaymentMethod, originBank: string): string {
+  if (paymentMethod === 'pago_movil') {
+    const selectedBank = VENEZUELAN_BANKS.find((bank) => bank.code === originBank);
+    return selectedBank?.name ?? 'Pago Movil';
+  }
+
+  return paymentLabels[paymentMethod];
 }
 
 function CheckoutSection({ title, children }: { title: string; children: React.ReactNode }) {
@@ -489,52 +499,69 @@ function PaymentInstructions({
     );
   }
 
+  const requiresOriginBank = paymentMethod === 'pago_movil';
   const isZelle = paymentMethod === 'zelle';
+  const zelleWhatsappUrl = `https://wa.me/${toWhatsappPhone(STORE_INFO.phone)}?text=${encodeURIComponent(PAYMENT_DETAILS.ZELLE.whatsappMessage)}`;
 
   return (
     <div className="space-y-4">
       <div className="grid gap-3 text-xs uppercase tracking-wider font-bold text-zinc-400 sm:grid-cols-2">
         {paymentMethod === 'zelle' ? (
+          <div className="sm:col-span-2 rounded-none border border-white/10 bg-white/[0.03] p-4">
+            <p className="leading-6">
+              Los datos de Zelle se confirman directamente por WhatsApp antes de pagar.
+            </p>
+            <a
+              href={zelleWhatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 inline-flex h-11 items-center justify-center gap-2 border border-[#25D366] bg-[#25D366] px-4 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:bg-transparent hover:text-[#25D366]"
+            >
+              <Send className="h-4 w-4" />
+              Consultar Zelle por WhatsApp
+            </a>
+          </div>
+        ) : paymentMethod === 'binance' ? (
           <>
             <p>
-              Email Zelle: <span className="font-mono font-black text-white">{PAYMENT_DETAILS.ZELLE.email}</span>
+              Binance: <span className="font-mono font-black text-white">{PAYMENT_DETAILS.BINANCE.username}</span>
             </p>
             <p>
-              Titular: <span className="font-black text-white">{PAYMENT_DETAILS.ZELLE.holder}</span>
+              ID de Usuario: <span className="font-mono font-black text-white">{PAYMENT_DETAILS.BINANCE.userId}</span>
+            </p>
+            <p>
+              Correo: <span className="font-mono font-black text-white normal-case">{PAYMENT_DETAILS.BINANCE.email}</span>
             </p>
           </>
-        ) : paymentMethod === 'transferencia' ? (
-          <>
-            <p>
-              Banco: <span className="font-black text-white">{PAYMENT_DETAILS.TRANSFER.bank}</span>
-            </p>
-            <p>
-              Cuenta Corriente: <span className="font-mono font-black text-white">{PAYMENT_DETAILS.TRANSFER.accountNumber}</span>
-            </p>
-            <p>
-              Titular: <span className="font-black text-white">{PAYMENT_DETAILS.TRANSFER.holder}</span>
-            </p>
-            <p>
-              RIF: <span className="font-mono font-black text-white">{PAYMENT_DETAILS.TRANSFER.rif}</span>
-            </p>
-          </>
+        ) : paymentMethod === 'zinli' ? (
+          <p>
+            Zinli: <span className="font-mono font-black text-white normal-case">{PAYMENT_DETAILS.ZINLI.email}</span>
+          </p>
+        ) : paymentMethod === 'wally' ? (
+          <p>
+            Wally: <span className="font-mono font-black text-white">{PAYMENT_DETAILS.WALLY.phone}</span>
+          </p>
         ) : (
           <>
-            <p>
-              Banco: <span className="font-black text-white">{PAYMENT_DETAILS.PAGO_MOVIL.bank}</span>
-            </p>
-            <p>
-              Teléfono: <span className="font-mono font-black text-white">{PAYMENT_DETAILS.PAGO_MOVIL.phone}</span>
-            </p>
-            <p>
-              Cédula / RIF: <span className="font-mono font-black text-white">{PAYMENT_DETAILS.PAGO_MOVIL.rif}</span>
-            </p>
+            {PAYMENT_DETAILS.PAGO_MOVIL.map((account) => (
+              <div key={`${account.bank}-${account.code}`} className="rounded-none border border-white/10 bg-white/[0.03] p-4">
+                <p>
+                  Banco: <span className="font-black text-white">{account.bank} - {account.code}</span>
+                </p>
+                <p className="mt-2">
+                  Teléfono: <span className="font-mono font-black text-white">{account.phone}</span>
+                </p>
+                <p className="mt-2">
+                  Cédula: <span className="font-mono font-black text-white">{account.cedula}</span>
+                </p>
+              </div>
+            ))}
           </>
         )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 border-t border-white/5 pt-4">
-        {!isZelle && (
+        {requiresOriginBank && (
           <Field label="Banco Emisor">
             <select
               value={originBank}
@@ -549,13 +576,13 @@ function PaymentInstructions({
             </select>
           </Field>
         )}
-        <Field label={isZelle ? 'Email o Nombre de la Cuenta' : 'Número de Referencia'}>
+        <Field label={paymentMethod === 'binance' ? 'TxID / Referencia' : 'Número de Referencia'}>
           <input
             required
             value={reference}
             onChange={(event) => setReference(event.target.value)}
             className="checkout-input font-mono text-xs font-bold uppercase tracking-wider"
-            placeholder={isZelle ? 'EJ: CLIENTE@CORREO.COM' : 'EJ: 12345678'}
+            placeholder={paymentMethod === 'binance' ? 'EJ: TXID123...' : 'EJ: 12345678'}
           />
         </Field>
         {isZelle && (

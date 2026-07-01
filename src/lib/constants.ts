@@ -36,25 +36,37 @@ export const PAYMENT_METHODS = [
     ],
   },
   {
-    id: "TRANSFER",
-    label: "Transferencia Bancaria",
-    icon: "🏦",
-    currency: "BSS",
-    description: "Transferencia desde cualquier banco",
-    instructions: [
-      "Realiza la transferencia a la cuenta indicada",
-      "Incluye tu nombre y número de pedido en el concepto",
-      "Envía el comprobante de transferencia",
-    ],
-  },
-  {
     id: "ZELLE",
     label: "Zelle",
     icon: "💵",
     currency: "USD",
-    description: "Transferencia en dólares vía Zelle",
+    description: "Datos disponibles por WhatsApp",
     instructions: [
-      "Envía el monto indicado al email/teléfono de Zelle",
+      "Solicita los datos actualizados por WhatsApp",
+      "Confirma el monto antes de pagar",
+      "Envía captura de confirmación al finalizar",
+    ],
+  },
+  {
+    id: "ZINLI",
+    label: "Zinli",
+    icon: "📲",
+    currency: "USD",
+    description: "Pago en divisas vía Zinli",
+    instructions: [
+      "Envía el monto indicado al correo Zinli",
+      "Incluye el número de pedido en la nota",
+      "Envía captura de confirmación",
+    ],
+  },
+  {
+    id: "WALLY",
+    label: "Wally",
+    icon: "📲",
+    currency: "USD",
+    description: "Pago en divisas vía Wally",
+    instructions: [
+      "Envía el monto indicado al teléfono Wally",
       "Incluye el número de pedido en la nota",
       "Envía captura de confirmación",
     ],
@@ -102,27 +114,33 @@ export const PAYMENT_METHODS = [
  * Payment receiving details (configurable via admin)
  */
 export const PAYMENT_DETAILS = {
-  PAGO_MOVIL: {
-    phone: "0412-000-0000",
-    bank: "Mercantil",
-    cedula: "V-00.000.000",
-    rif: "J-00000000-0",
-  },
-  TRANSFER: {
-    bank: "Mercantil",
-    accountType: "Corriente",
-    accountNumber: "0105-0000-00-0000000000",
-    holder: "Clazico Store C.A.",
-    rif: "J-00000000-0",
-  },
+  PAGO_MOVIL: [
+    {
+      bank: "Bancamiga",
+      code: "0172",
+      phone: "0412-5806711",
+      cedula: "29.999.867",
+    },
+    {
+      bank: "Banesco",
+      code: "0134",
+      phone: "0412-5806711",
+      cedula: "29.999.867",
+    },
+  ],
   ZELLE: {
-    email: "pagos@clazico.com",
-    holder: "Clazico Store",
+    whatsappMessage: "Hola Clazico Store. Quiero consultar los datos para pagar por Zelle.",
   },
   BINANCE: {
-    binanceId: "00000000",
-    network: "TRC-20 / BEP-20",
-    wallet: "TXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+    username: "ClazicoStore",
+    userId: "209307335",
+    email: "clazico.ve1@gmail.com",
+  },
+  ZINLI: {
+    email: "jesus22castillojesus22@hotmail.com",
+  },
+  WALLY: {
+    phone: "04125806711",
   },
 } as const;
 

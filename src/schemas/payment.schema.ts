@@ -6,6 +6,9 @@ export const submitPaymentSchema = z.object({
     'pago_movil',
     'transferencia',
     'zelle',
+    'binance',
+    'zinli',
+    'wally',
     'efectivo_usd',
     'punto_venta',
   ]),
@@ -47,7 +50,7 @@ export const listPaymentsSchema = z.object({
   status: z.enum(['pending', 'verified', 'rejected']).optional(),
   orderId: z.string().optional(),
   method: z
-    .enum(['pago_movil', 'transferencia', 'zelle', 'efectivo_usd', 'punto_venta'])
+    .enum(['pago_movil', 'transferencia', 'zelle', 'binance', 'zinli', 'wally', 'efectivo_usd', 'punto_venta'])
     .optional(),
 });
 

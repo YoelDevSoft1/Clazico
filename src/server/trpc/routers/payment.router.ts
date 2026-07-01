@@ -56,13 +56,16 @@ export const paymentRouter = createTRPCRouter({
         pago_movil: 'PAGO_MOVIL',
         transferencia: 'TRANSFER',
         zelle: 'ZELLE',
+        binance: 'BINANCE',
+        zinli: 'CASH_USD',
+        wally: 'CASH_USD',
         efectivo_usd: 'CASH_USD',
         punto_venta: 'CASH_BSS',
       };
       const dbMethod = methodMap[input.method] ?? 'CASH_USD';
 
       // Decide database currency and amount based on method
-      const isUSD = input.method === 'zelle' || input.method === 'efectivo_usd';
+      const isUSD = ['zelle', 'binance', 'zinli', 'wally', 'efectivo_usd'].includes(input.method);
       const dbAmount = isUSD ? input.amountUsd : input.amountBs;
       const dbCurrency = isUSD ? 'USD' as const : 'BSS' as const;
 
@@ -286,6 +289,9 @@ export const paymentRouter = createTRPCRouter({
           pago_movil: 'PAGO_MOVIL',
           transferencia: 'TRANSFER',
           zelle: 'ZELLE',
+          binance: 'BINANCE',
+          zinli: 'CASH_USD',
+          wally: 'CASH_USD',
           efectivo_usd: 'CASH_USD',
           punto_venta: 'CASH_BSS',
         };

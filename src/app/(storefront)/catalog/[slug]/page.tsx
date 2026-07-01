@@ -503,7 +503,7 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
               </Accordion>
               <Accordion title="Soporte y Garantías">
                 <p className="leading-relaxed">
-                  Todos nuestros artículos provienen de importación directa y cuentan con verificación de autenticidad. Ofrecemos hasta 7 días para cambios de talla en nuestra sucursal física, sujeto a disponibilidad en stock de Velox POS.
+                  Ofrecemos hasta 7 días para cambios de talla en nuestra sucursal física, sujeto a disponibilidad en stock de Velox POS.
                 </p>
               </Accordion>
             </div>

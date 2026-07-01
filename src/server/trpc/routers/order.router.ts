@@ -151,6 +151,9 @@ export const orderRouter = createTRPCRouter({
         pago_movil: 'PAGO_MOVIL',
         transferencia: 'TRANSFER',
         zelle: 'ZELLE',
+        binance: 'BINANCE',
+        zinli: 'CASH_USD',
+        wally: 'CASH_USD',
         efectivo_usd: 'CASH_USD',
         punto_venta: 'CASH_BSS', // Map custom methods to enums
       };
