@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useEffect } from 'react';
 import { X, Trash2, Plus, Minus, ArrowRight, ShoppingBag, ShieldCheck, Truck } from 'lucide-react';
 import { useCartStore } from '@/stores/cart.store';
+import { STORE_INFO } from '@/lib/constants';
 import { formatUSD, formatBsS } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { useTRPC } from '@/lib/trpc-client';
@@ -108,7 +109,7 @@ export function CartDrawer() {
               <div className="space-y-3 mb-8">
                 <h3 className="font-outfit text-xl font-black uppercase italic text-white tracking-tight">Tu carrito está vacío</h3>
                 <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 max-w-[280px] mx-auto leading-relaxed">
-                  Equípate con lo mejor del calzado y ropa exclusiva. Contamos con stock confirmado físicamente en Caracas.
+                  Equípate con lo mejor del calzado y ropa exclusiva. Contamos con stock confirmado físicamente en {STORE_INFO.address}
                 </p>
               </div>
               <Link

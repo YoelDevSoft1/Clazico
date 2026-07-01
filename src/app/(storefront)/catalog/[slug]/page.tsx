@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useTRPC } from '@/lib/trpc-client';
 import { useCartStore, type CartItem } from '@/stores/cart.store';
+import { STORE_INFO } from '@/lib/constants';
 import { formatBsS, formatUSD } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 
@@ -496,13 +497,13 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
               )}
               <Accordion title="Métodos de Entrega en Venezuela">
                 <ul className="space-y-2">
-                  <li>• <strong className="text-white">Retiro en Tienda (Caracas, Altamira):</strong> Gratis, de lunes a sábado.</li>
+                  <li>• <strong className="text-white">Retiro en Tienda:</strong> Gratis en {STORE_INFO.address}, de lunes a sábado.</li>
                   <li>• <strong className="text-white">Envíos Nacionales:</strong> MRW, ZOOM y TEALCA con cobro en destino.</li>
                 </ul>
               </Accordion>
               <Accordion title="Soporte y Garantías">
                 <p className="leading-relaxed">
-                  Todos nuestros artículos provienen de importación directa y cuentan con verificación de autenticidad. Ofrecemos hasta 7 días para cambios de talla en nuestra sucursal física de Caracas, sujeto a disponibilidad en stock de Velox POS.
+                  Todos nuestros artículos provienen de importación directa y cuentan con verificación de autenticidad. Ofrecemos hasta 7 días para cambios de talla en nuestra sucursal física, sujeto a disponibilidad en stock de Velox POS.
                 </p>
               </Accordion>
             </div>

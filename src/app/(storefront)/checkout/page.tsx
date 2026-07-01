@@ -299,7 +299,7 @@ export default function CheckoutPage() {
                 <ChoiceCard
                   active={deliveryMethod === 'PICKUP'}
                   title="Retiro en Tienda"
-                  subtitle="Caracas, Altamira. Sin costo."
+                  subtitle={`${STORE_INFO.address} Sin costo.`}
                   onClick={() => setDeliveryMethod('PICKUP')}
                 />
                 <ChoiceCard
