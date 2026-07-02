@@ -37,6 +37,7 @@ const payload = {
 try {
   const result = CreateWebOrderDtoSchema.parse(payload);
   console.log("Success!", result.delivery);
-} catch (e: any) {
-  console.error("Failed:", JSON.stringify(e.errors, null, 2));
+} catch (error: unknown) {
+  const errors = error instanceof Error ? error.message : String(error);
+  console.error("Failed:", errors);
 }

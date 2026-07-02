@@ -30,6 +30,8 @@ type FilterPanelProps = {
   clearFilters: () => void;
 };
 
+const PRODUCT_REFRESH_MS = 30_000;
+
 /* ─── Product card ────────────────────────────────────────── */
 function ProductCard({ product }: { product: Product }) {
   const hasImage = Boolean(product.imageUrl);
@@ -176,17 +178,23 @@ export default function CatalogPage() {
   const [inStock, setInStock] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const { data: rawCategories = [] } = useQuery(trpc.product.categories.queryOptions());
+  const { data: rawCategories = [] } = useQuery({
+    ...trpc.product.categories.queryOptions(),
+    refetchInterval: PRODUCT_REFRESH_MS,
+    refetchIntervalInBackground: false,
+  });
   const categories = rawCategories.filter((item): item is string => Boolean(item));
 
-  const { data: productsData, isLoading } = useQuery(
-    trpc.product.list.queryOptions({
+  const { data: productsData, isLoading } = useQuery({
+    ...trpc.product.list.queryOptions({
       category: category || undefined,
       sortBy,
       inStock: inStock || undefined,
       limit: 100,
     }),
-  );
+    refetchInterval: PRODUCT_REFRESH_MS,
+    refetchIntervalInBackground: false,
+  });
 
   const filteredProducts = useMemo(() => {
     const products = productsData?.items ?? [];

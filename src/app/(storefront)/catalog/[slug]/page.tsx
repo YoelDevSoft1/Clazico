@@ -66,6 +66,8 @@ interface PDPProduct {
   images?: PDPImage[];
 }
 
+const PRODUCT_REFRESH_MS = 30_000;
+
 function Accordion({ title, children }: AccordionProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -106,14 +108,16 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
   const [selectedColor, setSelectedColor] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
-  const { data: product, isLoading, error } = useQuery(
-    trpc.product.getBySlug.queryOptions({ slug }),
-  ) as { data: PDPProduct | null | undefined; isLoading: boolean; error: unknown };
+  const { data: product, isLoading, error } = useQuery({
+    ...trpc.product.getBySlug.queryOptions({ slug }),
+    refetchInterval: PRODUCT_REFRESH_MS,
+    refetchIntervalInBackground: false,
+  }) as { data: PDPProduct | null | undefined; isLoading: boolean; error: unknown };
 
   // Real variants come from productCache.productVariants. When the
   // product has no variants, fall back to a single "default" pseudo-
   // variant so the selector keeps working for one-size products.
-  const variants = product?.variants ?? [];
+  const variants = useMemo(() => product?.variants ?? [], [product?.variants]);
 
   // Build the size/color option space from the variants table.
   const sizeOptions = useMemo(() => {
@@ -215,9 +219,6 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
   }
 
   const isOutOfStock = product.currentStock <= 0;
-  const formattedPriceUsd = formatUSD(Number(product.priceUsd));
-  const formattedPriceBs = product.priceBs ? formatBsS(Number(product.priceBs)) : '';
-
   const variantPriceUsd = selectedVariant?.priceUsdOverride
     ? Number(selectedVariant.priceUsdOverride)
     : Number(product.priceUsd);

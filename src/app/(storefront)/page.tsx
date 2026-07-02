@@ -3,8 +3,10 @@ import { ArrowRight, Check, ShieldCheck, Truck } from 'lucide-react';
 import { desc, eq } from 'drizzle-orm';
 import { db } from '@/server/db';
 import * as schema from '@/../drizzle/schema';
-import { FeaturedCarousel } from '@/components/home/featured-carousel';
-import { ActiveCollectionCarousel } from '@/components/home/active-collection-carousel';
+import {
+  LiveActiveCollectionCarousel,
+  LiveFeaturedCarousel,
+} from '@/components/home/live-product-sections';
 import { BrandMarquee } from '@/components/home/brand-marquee';
 
 export const dynamic = 'force-dynamic';
@@ -149,7 +151,7 @@ export default async function HomePage() {
 
             {/* Hero Right: Sidebar Featured Carousel */}
             <aside className="hidden min-w-0 md:block">
-              <FeaturedCarousel products={featuredProducts} />
+              <LiveFeaturedCarousel initialProducts={featuredProducts} />
             </aside>
           </div>
         </div>
@@ -172,7 +174,7 @@ export default async function HomePage() {
           </Link>
         </div>
 
-        <ActiveCollectionCarousel products={featuredProducts} />
+        <LiveActiveCollectionCarousel initialProducts={featuredProducts} />
       </section>
     </div>
   );

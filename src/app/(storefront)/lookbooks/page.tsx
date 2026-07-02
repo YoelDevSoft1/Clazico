@@ -78,6 +78,7 @@ type StorefrontLookbook = EditorialLook & {
 };
 
 const FALLBACK_LOOKS = DEFAULT_LOOKBOOKS satisfies EditorialLook[];
+const PRODUCT_REFRESH_MS = 30_000;
 
 export default function LookbooksPage() {
   const trpc = useTRPC();
@@ -87,13 +88,15 @@ export default function LookbooksPage() {
   const { data: lookbooks = [], isLoading: isLoadingLookbooks } = useQuery(
     trpc.lookbook.listForStorefront.queryOptions(),
   );
-  const { data: productsData, isLoading: isLoadingProducts } = useQuery(
-    trpc.product.list.queryOptions({
+  const { data: productsData, isLoading: isLoadingProducts } = useQuery({
+    ...trpc.product.list.queryOptions({
       limit: 16,
       inStock: true,
       sortBy: 'newest',
     }),
-  );
+    refetchInterval: PRODUCT_REFRESH_MS,
+    refetchIntervalInBackground: false,
+  });
 
   const products = (productsData?.items ?? []) as CatalogProduct[];
   const looks = useMemo<EditorialLook[]>(() => {

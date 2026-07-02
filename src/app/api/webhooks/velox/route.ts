@@ -86,7 +86,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    await processWebhook(envelope as any, db, schema);
+    await processWebhook(payload, db, schema);
 
     await db
       .update(schema.webhookDeliveries)
